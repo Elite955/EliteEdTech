@@ -13,12 +13,12 @@ Thanks for contributing to the EdTech Platform.
 Create a branch from the latest `main`:
 
 ```bash
-git checkout main
+git switch main
 git pull origin main
-git checkout -b feature/short-description
+git switch -c admin/short-description
 ```
 
-Use `fix/short-description` for bug fixes.
+Use the prefix for the area you own: `admin/`, `teacher/`, or `student/`. Do not work outside your ownership folders. Use a descriptive suffix, such as `admin/manage-students`.
 
 Write clear commits, for example:
 
@@ -31,11 +31,13 @@ docs: update local setup instructions
 ## Pull requests
 
 - Open a PR into `main`.
+- Prefix the title with `[admin]`, `[teacher]`, or `[student]`.
 - Explain what changed and how you tested it.
 - Link the issue using `Closes #<issue-number>`.
 - Request review from at least one teammate.
 - Resolve review comments and wait for approval before merging.
 - Do not merge code that breaks the agreed MVP flow.
+- Do not push unfinished work directly to `main` or force-push to it.
 
 ## Team coordination
 

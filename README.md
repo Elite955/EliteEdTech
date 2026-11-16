@@ -52,6 +52,45 @@ Add folders as work begins; do not commit empty placeholders. See `TASKS.md` for
 - Use payment sandbox mode only; do not process real charges during development.
 - Do not record a class without consent, and do not expose recordings when consent was not given.
 
+## Admin application (development)
+
+The web app uses **React + TypeScript + Vite**, **Node.js + Express**, and **PostgreSQL**. Students, teachers, and administrators use one shared sign-in page; successful sign-in routes each role to its own workspace. Admin accounts are created with the bootstrap seed, while student and teacher accounts are created by an administrator. There are no hard-coded demo credentials.
+
+1. Install Node.js 22 or later and PostgreSQL. Create a local database named `edtech_admin`.
+2. From the repository root, run `Copy-Item .env.example .env`. Set `DATABASE_URL`, `BOOTSTRAP_ADMIN_PASSWORD` (at least 12 characters), and the bootstrap admin name and email. Generate random signing and encryption keys in PowerShell:
+
+   ```powershell
+   node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+   ```
+
+   Put the first value in `JWT_SECRET` and the second in `FIELD_ENCRYPTION_KEY`. Keep `.env` private and untracked.
+3. Install and initialize the API:
+
+   ```powershell
+   Set-Location backend
+   npm install
+   npm run db:migrate
+   npm run db:seed
+   npm run dev
+   ```
+
+4. In a second terminal, start the admin app:
+
+   ```powershell
+   Set-Location admin
+   npm install
+   npm run dev
+   ```
+
+   Open `http://localhost:5173`. Admins enroll an authenticator app on first sign-in and use its one-time code on later sign-ins. Student and teacher accounts use their own email/password and are routed to their role-specific placeholder pages.
+
+The API listens on port `4000`, the admin app on `5173`, and Vite proxies `/api` and Socket.IO during development. The browser session uses an HttpOnly cookie; only one active session is retained per administrator. Password reset email requires configured SMTP. Razorpay test mode, Zoom, SMTP, and Twilio WhatsApp sandbox status is shown in **Integrations**; credentials are read from server environment variables and are never shown in the UI. External actions remain unavailable until their provider service is actually configured.
+
+The current implementation provides shared student/teacher/admin sign-in, admin MFA, password reset, session revocation, server-side role/permission checks, dashboard aggregates, student/teacher and admin-account management, role management, audit logging, global authorized search, CSV user exports, platform settings, and operational record views/status changes. Student and teacher accounts currently land on role-specific placeholder pages; their full learning and teaching workspaces are not implemented. A database is required for live records; empty states are not demo data.
+
+Razorpay transactions/refunds, Zoom meeting creation, Twilio outbound messaging, bulk notifications, PDF/Excel report generation, database backup execution, and user impersonation are not wired to provider services yet. The integrations page reports environment credential presence without displaying secrets; it does not claim that provider actions work. Do not enable financial or classroom actions until the actual server-side integrations and their permission checks are implemented and tested.
+
 ## Planning
 
 Track work through GitHub Issues and the repository's project board. Each issue should have one owner, a clear outcome, and acceptance criteria. Confirm open technology and integration choices with the team before implementation.
