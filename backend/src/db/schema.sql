@@ -1,0 +1,229 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  role TEXT NOT NULL CHECK (role IN ('student', 'teacher', 'admin')),
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  phone TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'suspended', 'deactivated')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS student_profiles (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  age SMALLINT CHECK (age IS NULL OR age BETWEEN 1 AND 120),
+  grade TEXT
+);
+
+CREATE TABLE IF NOT EXISTS teacher_profiles (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  subjects TEXT[] NOT NULL DEFAULT '{}',
+  bio TEXT,
+  hourly_rate NUMERIC(10, 2) CHECK (hourly_rate IS NULL OR hourly_rate >= 0),
+  approved BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE TABLE IF NOT EXISTS admin_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  is_system BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS permissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  module TEXT NOT NULL,
+  action TEXT NOT NULL,
+  UNIQUE (module, action)
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role_id UUID NOT NULL REFERENCES admin_roles(id) ON DELETE CASCADE,
+  permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+  PRIMARY KEY (role_id, permission_id)
+);
+
+CREATE TABLE IF NOT EXISTS admin_profiles (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  role_id UUID NOT NULL REFERENCES admin_roles(id),
+  mfa_secret_encrypted TEXT,
+  mfa_pending_secret_encrypted TEXT,
+  mfa_pending_expires_at TIMESTAMPTZ,
+  last_login_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  ip_address INET,
+  user_agent TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  ip_address INET,
+  user_agent TEXT
+);
+
+CREATE TABLE IF NOT EXISTS admin_password_reset_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL REFERENCES users(id),
+  teacher_id UUID NOT NULL REFERENCES users(id),
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'paid', 'completed', 'cancelled')),
+  amount NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (amount >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (ends_at > starts_at)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID REFERENCES bookings(id),
+  student_id UUID REFERENCES users(id),
+  provider TEXT NOT NULL DEFAULT 'razorpay',
+  provider_transaction_id TEXT,
+  amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'succeeded', 'failed', 'refunded')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS class_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id),
+  meeting_provider TEXT NOT NULL DEFAULT 'zoom',
+  meeting_url TEXT,
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'ongoing', 'completed', 'cancelled')),
+  started_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
+  recording_url TEXT,
+  recording_consent BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS attendance_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id),
+  joined_at TIMESTAMPTZ,
+  left_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (session_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id UUID NOT NULL REFERENCES users(id),
+  room TEXT NOT NULL DEFAULT 'global',
+  content TEXT NOT NULL,
+  reported BOOLEAN NOT NULL DEFAULT false,
+  status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible', 'hidden', 'deleted')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  moderated_by UUID REFERENCES users(id),
+  moderated_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  subject TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  priority TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+  assigned_to UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_id UUID REFERENCES users(id),
+  channel TEXT NOT NULL CHECK (channel IN ('email', 'whatsapp', 'in_app')),
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sent', 'failed')),
+  provider_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS managed_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  module TEXT NOT NULL,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  data JSONB NOT NULL DEFAULT '{}',
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_by UUID REFERENCES users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO platform_settings (key, value) VALUES
+  ('platform_name', '"EdTech Platform"'::jsonb),
+  ('currency', '"INR"'::jsonb),
+  ('platform_commission_percent', '10'::jsonb),
+  ('cancellation_window_hours', '24'::jsonb),
+  ('maintenance_mode', 'false'::jsonb),
+  ('maintenance_message', '"Scheduled maintenance in progress."'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  actor_id UUID REFERENCES users(id),
+  event TEXT NOT NULL,
+  module TEXT NOT NULL,
+  target_id TEXT,
+  ip_address INET,
+  user_agent TEXT,
+  details JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS users_role_status_idx ON users(role, status);
+CREATE INDEX IF NOT EXISTS user_sessions_user_active_idx ON user_sessions(user_id, expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS bookings_status_starts_at_idx ON bookings(status, starts_at);
+CREATE INDEX IF NOT EXISTS payments_status_created_at_idx ON payments(status, created_at);
+CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS managed_records_module_created_at_idx ON managed_records(module, created_at DESC);
+
+CREATE OR REPLACE FUNCTION prevent_audit_log_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'Audit log records are append-only.';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS audit_logs_immutable ON audit_logs;
+CREATE TRIGGER audit_logs_immutable
+  BEFORE UPDATE OR DELETE ON audit_logs
+  FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation();
