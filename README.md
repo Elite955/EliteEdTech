@@ -1,62 +1,57 @@
 # EdTech Platform
 
-A one-to-one teacher–student learning platform with teacher profiles, class scheduling, payments, live-class/meeting support, and communication.
+A web-based, one-to-one tutoring platform where students find teachers, request class times, and pay for approved bookings. The platform also supports live classes, attendance and session history, feedback, and a moderated student chat.
 
-## Project status
+## Team and ownership
 
-This repository is being developed as a 7-day MVP by a three-person team. The first goal is a working end-to-end demonstration of the core teacher–student booking journey. Advanced live-class, chat, and payment features should use practical MVP integrations or clearly documented demo workflows.
-
-## Team responsibilities
-
-| Team member | Area | GitHub |
+| Team member | Role | Owns |
 |---|---|---|
-| Ashish | Python backend, authentication, database, integration | @ashishMenon05 |
-| Bhuvan | Frontend, landing page, login/register, dashboards | Confirm GitHub username |
-| Vinay | Teacher profiles, availability, booking, chat/payment workflow and testing | Confirm GitHub username |
+| Bhuvan | Admin | `shared/`, `backend/`, `admin/`, `docs/`, and `TASKS.md` |
+| Ashish | Teacher | `teacher/` |
+| Vinay | Student | `student/` |
 
-## Development workflow
+Keep changes within your ownership area. The shared database schema and API contract are maintained by Bhuvan; teacher and student features should consume that contract rather than changing it.
 
-1. Pick an issue from the **EdTech Development Tracker** project board.
-2. Assign the issue to one owner and move it to **In Progress**.
-3. Create a branch using `feature/short-description` or `fix/short-description`.
-4. Commit small, meaningful changes.
-5. Open a Pull Request into `main`; include `Closes #<issue-number>` in the PR description.
-6. Request a teammate review. Merge only after the change is tested.
-7. Move the issue to **Done** after the PR is merged.
+## Product scope
 
-Do not push unfinished work directly to `main`.
+- **Students:** browse teacher profiles, request available class slots, view bookings and payment/session history, chat, and submit feedback.
+- **Teachers:** manage profiles, subjects, hourly rates and availability; review booking requests; conduct classes; view attendance, session logs, and student feedback.
+- **Admins:** manage users and permissions, bookings, payments, chat moderation, recordings and reports, and promotional links.
+- **Platform services:** role-based registration and sign-in, MFA, encrypted sensitive data, single-active-session enforcement, audit logging, notifications, and a central database.
 
-## Suggested repository layout
+Live-class and payment integrations must be selected by the team and use test/sandbox credentials during development. Recordings require participant consent. Chat must apply the agreed age-appropriate protections for students aged 10–12.
+
+## Repository layout
 
 ```text
 EDtech-Repo/
-├── backend/          # Python API and business logic
-├── frontend/         # Web client
-├── docs/             # Architecture, API contracts and setup notes
-├── tests/            # Automated and integration tests
-├── .gitignore
-├── CONTRIBUTING.md
+├── shared/       # Database schema, API contract, shared environment-variable reference
+├── backend/      # Authentication, security, database, payments, notifications
+├── admin/        # Admin dashboard
+├── teacher/      # Teacher dashboard
+├── student/      # Student dashboard
+├── docs/         # Architecture and project documentation
 └── README.md
 ```
 
-Create these folders as the corresponding work starts; avoid committing empty placeholder directories.
+Add folders as work begins; do not commit empty placeholders. See `TASKS.md` for feature details, ownership boundaries, and completion criteria.
 
-## MVP priorities
+## Development workflow
 
-- Teacher/student registration and login
-- Teacher profiles and availability
-- Student class booking and teacher booking view
-- Role-based dashboards
-- A demonstrable communication/meeting flow
-- Sandbox/demo-only payment flow, if time permits
+1. Select an issue from the repository's project board and assign one owner.
+2. Create a role-prefixed branch: `admin/short-description`, `teacher/short-description`, or `student/short-description`.
+3. Make focused commits and test the changes.
+4. Open a pull request targeting `main`; start the title with `[admin]`, `[teacher]`, or `[student]`, and include `Closes #<issue-number>` in the description.
+5. Request a review and merge only after approval and testing. Do not push unfinished work directly to `main` or force-push to it.
+6. Move the issue to **Done** after the pull request is merged.
 
-## Safety and configuration
+## Configuration and security
 
 - Never commit API keys, passwords, database credentials, or real payment details.
-- Keep local secrets in an untracked `.env` file.
-- Provide a sanitized `.env.example` for required configuration.
-- Use payment sandbox mode only; do not process real charges during the MVP demo.
+- Store local secrets in an untracked `.env` file and document required variable names in a sanitized example/reference.
+- Use payment sandbox mode only; do not process real charges during development.
+- Do not record a class without consent, and do not expose recordings when consent was not given.
 
 ## Planning
 
-Track work through GitHub Issues and the repository's Project board. Each issue should have one owner, a clear outcome, and acceptance criteria.
+Track work through GitHub Issues and the repository's project board. Each issue should have one owner, a clear outcome, and acceptance criteria. Confirm open technology and integration choices with the team before implementation.
