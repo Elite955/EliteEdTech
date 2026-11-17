@@ -10,7 +10,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAuth } from '../auth/useAuth'
 import { api, getErrorMessage } from '../lib/api'
 
-type NavItem = { label: string; path: string; module: string; icon: LucideIcon }
+type NavItem = { label: string; path: string; module: string; icon: LucideIcon; superAdminOnly?: boolean }
 type NavGroup = { label: string; items: NavItem[] }
 
 const navigation: NavGroup[] = [
@@ -49,6 +49,7 @@ const navigation: NavGroup[] = [
     { label: 'Platform configuration', path: '/modules/configuration', module: 'configuration', icon: Settings2 },
     { label: 'Integrations', path: '/modules/integrations', module: 'integrations', icon: Building2 },
     { label: 'Security management', path: '/modules/security', module: 'security', icon: LockKeyhole },
+    { label: 'Active sessions', path: '/sessions', module: 'security', icon: MonitorPlay, superAdminOnly: true },
     { label: 'Maintenance mode', path: '/modules/maintenance', module: 'maintenance', icon: Shield },
   ] },
 ]
@@ -77,6 +78,7 @@ const pageTitles: Record<string, string> = {
   configuration: 'Platform configuration',
   integrations: 'Integrations',
   security: 'Security management',
+  sessions: 'Active sessions',
   backups: 'Backup management',
   maintenance: 'Maintenance mode',
 }
@@ -149,7 +151,7 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
         </div>
         <nav className="sidebar-nav" aria-label="Admin navigation">
           {navigation.map((group) => {
-            const items = group.items.filter((item) => can(item.module, 'view'))
+            const items = group.items.filter((item) => can(item.module, 'view') && (!item.superAdminOnly || user?.roleCode === 'super_admin'))
             if (!items.length) return null
             return (
               <div className="nav-group" key={group.label}>

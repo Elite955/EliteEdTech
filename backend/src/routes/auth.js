@@ -49,8 +49,8 @@ async function createSession(req, res, userId, rememberMe = false) {
     [userId],
   );
   await pool.query(
-    `INSERT INTO admin_sessions (id, user_id, expires_at, ip_address, user_agent)
-     VALUES ($1, $2, $3, $4, $5)`,
+    `INSERT INTO admin_sessions (id, user_id, expires_at, ip_address, user_agent, last_seen_at)
+     VALUES ($1, $2, $3, $4, $5, now())`,
     [sessionId, userId, expiresAt, req.ip, req.get('user-agent') ?? null],
   );
   const token = jwt.sign({ sub: userId, sid: sessionId, type: 'session' }, process.env.JWT_SECRET, { expiresIn: rememberMe ? '30d' : '8h' });
@@ -84,8 +84,8 @@ async function createUserSession(req, res, userId, rememberMe = false) {
     [userId],
   );
   await pool.query(
-    `INSERT INTO user_sessions (id, user_id, expires_at, ip_address, user_agent)
-     VALUES ($1, $2, $3, $4, $5)`,
+    `INSERT INTO user_sessions (id, user_id, expires_at, ip_address, user_agent, last_seen_at)
+     VALUES ($1, $2, $3, $4, $5, now())`,
     [sessionId, userId, expiresAt, req.ip, req.get('user-agent') ?? null],
   );
   const token = jwt.sign({ sub: userId, sid: sessionId, type: 'session' }, process.env.JWT_SECRET, { expiresIn: rememberMe ? '30d' : '8h' });

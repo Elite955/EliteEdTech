@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL,
   revoked_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ,
   ip_address INET,
   user_agent TEXT
 );
@@ -84,9 +85,13 @@ CREATE TABLE IF NOT EXISTS user_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL,
   revoked_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ,
   ip_address INET,
   user_agent TEXT
 );
+
+ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS admin_password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -770,16 +770,115 @@ adminRouter.patch('/admins/:id', requireAdmin, requirePermission('admins', 'edit
   } catch (error) { return next(error); }
 });
 
+adminRouter.get('/security/sessions/active', requireAdmin, requirePermission('security', 'view'), async (req, res, next) => {
+  try {
+    if (req.auth.role_code !== 'super_admin') return res.status(403).json({ error: 'Only a Super Admin can view active session details.' });
+    const { rows } = await pool.query(
+      `SELECT active_sessions.*,
+              (active_sessions.id = $1) AS is_current
+       FROM (
+         SELECT s.id::text AS id, u.name, u.email, u.role AS account_type,
+                r.name AS role_name, s.created_at, COALESCE(s.last_seen_at, s.created_at) AS last_seen_at, s.expires_at,
+                s.ip_address::text AS ip_address, s.user_agent
+         FROM admin_sessions s
+         JOIN users u ON u.id = s.user_id
+         JOIN admin_profiles ap ON ap.user_id = u.id
+         JOIN admin_roles r ON r.id = ap.role_id
+         WHERE s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'active' AND u.role = 'admin'
+         UNION ALL
+         SELECT s.id::text AS id, u.name, u.email, u.role AS account_type,
+                initcap(u.role) AS role_name, s.created_at, COALESCE(s.last_seen_at, s.created_at) AS last_seen_at, s.expires_at,
+                s.ip_address::text AS ip_address, s.user_agent
+         FROM user_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'active'
+           AND u.role IN ('student', 'teacher')
+       ) active_sessions
+       ORDER BY active_sessions.created_at DESC`,
+      [req.auth.session_id],
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    await writeAudit(req, { event: 'active_sessions_viewed', module: 'security', details: { sessionCount: rows.length } });
+    return res.json({ items: rows });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post('/security/sessions/:id/revoke', requireAdmin, requirePermission('security', 'manage'), async (req, res, next) => {
+  const sessionId = z.string().uuid().safeParse(req.params.id);
+  if (!sessionId.success) return validationError(res, sessionId.error);
+  if (req.auth.role_code !== 'super_admin') return res.status(403).json({ error: 'Only a Super Admin can revoke active sessions.' });
+  if (sessionId.data.toLowerCase() === String(req.auth.session_id).toLowerCase()) {
+    return res.status(409).json({ error: 'You cannot revoke the session you are currently using.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let sessionType;
+    let userId;
+    const adminSession = await client.query(
+      `SELECT s.user_id FROM admin_sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
+         AND u.status = 'active' AND u.role = 'admin'
+       FOR UPDATE OF s`,
+      [sessionId.data],
+    );
+    if (adminSession.rowCount) {
+      sessionType = 'admin';
+      userId = adminSession.rows[0].user_id;
+    } else {
+      const userSession = await client.query(
+        `SELECT s.user_id FROM user_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
+           AND u.status = 'active' AND u.role IN ('student', 'teacher')
+         FOR UPDATE OF s`,
+        [sessionId.data],
+      );
+      if (!userSession.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'The session is no longer active.' });
+      }
+      sessionType = 'user';
+      userId = userSession.rows[0].user_id;
+    }
+
+    const table = sessionType === 'admin' ? 'admin_sessions' : 'user_sessions';
+    const revoked = await client.query(
+      `UPDATE ${table} SET revoked_at = now()
+       WHERE id = $1 AND revoked_at IS NULL AND expires_at > now()
+       RETURNING id`,
+      [sessionId.data],
+    );
+    if (!revoked.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'The session is no longer active.' });
+    }
+    await client.query('COMMIT');
+    await writeAudit(req, { event: 'active_session_revoked', module: 'security', targetId: userId, details: { sessionType } });
+    return res.json({ message: 'The active session was revoked.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally { client.release(); }
+});
+
 adminRouter.get('/admins/:id/sessions', requireAdmin, requirePermission('admins', 'view'), async (req, res, next) => {
   try {
     if (req.auth.role_code !== 'super_admin') return res.status(403).json({ error: 'Only a Super Admin can manage administrator sessions.' });
     const account = await pool.query(`SELECT 1 FROM users WHERE id = $1 AND role = 'admin'`, [req.params.id]);
     if (!account.rowCount) return res.status(404).json({ error: 'Administrator not found.' });
     const { rows } = await pool.query(
-      `SELECT id, created_at, expires_at, revoked_at, ip_address, user_agent
-       FROM admin_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+      `SELECT id, created_at, COALESCE(last_seen_at, created_at) AS last_seen_at,
+              expires_at, revoked_at, ip_address, user_agent
+       FROM admin_sessions
+       WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+       ORDER BY created_at DESC LIMIT 50`,
       [req.params.id],
     );
+    res.setHeader('Cache-Control', 'private, no-store');
+    await writeAudit(req, { event: 'admin_sessions_viewed', module: 'security', targetId: req.params.id, details: { sessionCount: rows.length } });
     return res.json({ items: rows });
   } catch (error) { return next(error); }
 });

@@ -175,8 +175,11 @@ table input[type="checkbox"] { accent-color: #397b6d; }
 .result-count { color: #9299a8; font-size: 9px; white-space: nowrap; }
 .toolbar-note { display: flex; align-items: center; gap: 8px; color: #7a8497; font-size: 10px; }
 .toolbar-note svg { color: #6173d8; }
+.session-privacy-note { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; margin: -5px 0 16px; color: #52635c; background: #edf4f0; border: 1px solid #dfeae3; border-radius: 8px; font-size: 11px; line-height: 1.55; }
+.session-privacy-note svg { flex: 0 0 auto; color: #397b6d; }
 .table-scroll { width: 100%; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; text-align: left; }
+.session-table { min-width: 1080px; }
 thead { background: #fafbfe; }
 th { padding: 11px 14px; color: #74817b; border-block: 1px solid #e8ede9; font-size: 9px; font-weight: 700; letter-spacing: .45px; text-transform: uppercase; white-space: nowrap; }
 td { padding: 12px 14px; color: #59665f; border-bottom: 1px solid #edf1ee; font-size: 11px; vertical-align: middle; }
@@ -191,6 +194,12 @@ tbody tr:hover { background: #fcfcfe; }
 .person-cell strong { color: #3a4458; font-size: 10px; font-weight: 600; }
 .person-cell small, .table-secondary { display: block; margin-top: 3px; color: #9da4b1; font-size: 8px; }
 .table-primary { color: #555f73; font-size: 9px; }
+.session-ip { color: #53615b; font: 11px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; white-space: nowrap; }
+.session-device { min-width: 180px; max-width: 250px; }
+.session-device > strong { display: block; color: #46534d; font-size: 11px; font-weight: 600; }
+.session-device details { margin-top: 4px; }
+.session-device summary { width: fit-content; color: #2e6c61; cursor: pointer; font-size: 10px; }
+.session-device details code { display: block; max-width: 240px; padding: 6px; margin-top: 4px; overflow-wrap: anywhere; color: #66736c; background: #f5f8f6; border-radius: 4px; font-size: 9px; white-space: normal; }
 .status-pill { display: inline-flex; align-items: center; min-height: 20px; padding: 2px 7px; border-radius: 12px; font-size: 8px; font-weight: 600; text-transform: capitalize; white-space: nowrap; }
 .status-active, .status-visible, .status-completed, .status-paid, .status-succeeded, .status-resolved { color: #1d805f; background: #e8f7f0; }
 .status-pending, .status-scheduled, .status-queued, .status-in_progress, .status-approved { color: #a87520; background: #fff5df; }
