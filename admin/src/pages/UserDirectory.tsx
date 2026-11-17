@@ -33,22 +33,41 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
   const canEdit = can(`${role}s`, 'edit')
   const canExport = can(`${role}s`, 'export')
 
+  const fetchPeople = useCallback((signal?: AbortSignal) => (
+    api<{ items: Person[] }>(`/admin/${role}s?search=${encodeURIComponent(search)}`, { signal })
+  ), [role, search])
+
   const load = useCallback(async (showLoading = true) => {
     if (showLoading) {
       setLoading(true)
       setError('')
     }
     try {
-      const result = await api<{ items: Person[] }>(`/admin/${role}s?search=${encodeURIComponent(search)}`)
+      const result = await fetchPeople()
       setItems(result.items)
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     } finally {
       setLoading(false)
     }
-  }, [role, search])
+  }, [fetchPeople])
 
-  useEffect(() => { void load(false) }, [load])
+  useEffect(() => {
+    const controller = new AbortController()
+    async function loadPeople() {
+      try {
+        const result = await fetchPeople(controller.signal)
+        setItems(result.items)
+        setError('')
+      } catch (requestError) {
+        if (!controller.signal.aborted) setError(getErrorMessage(requestError))
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void loadPeople()
+    return () => controller.abort()
+  }, [fetchPeople])
 
   async function toggleStatus(item: Person) {
     const status = item.status === 'active' ? 'suspended' : 'active'

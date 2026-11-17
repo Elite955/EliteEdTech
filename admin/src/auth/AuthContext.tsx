@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AuthContext, type AuthenticatedUser, type Permission } from './context'
-import { api } from '../lib/api'
+import { ApiError, api } from '../lib/api'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null)
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    function handleSessionExpired() {
+      setUser(null)
+      setPermissions([])
+      setLoading(false)
+    }
+    window.addEventListener('edtech:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('edtech:session-expired', handleSessionExpired)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -34,9 +44,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
-    await api('/auth/logout', { method: 'POST' })
-    setUser(null)
-    setPermissions([])
+    try {
+      await api('/auth/logout', { method: 'POST' })
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 401)) throw error
+    } finally {
+      setUser(null)
+      setPermissions([])
+    }
   }, [])
 
   const can = useCallback((module: string, action: string) => (

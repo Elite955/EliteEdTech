@@ -28,24 +28,42 @@ export function AdminDirectory() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', roleCode: 'operations_admin' })
 
+  const fetchDirectory = useCallback((signal?: AbortSignal) => Promise.all([
+    api<{ items: AdminAccount[] }>('/admin/admins', { signal }),
+    api<{ items: AdminRole[] }>('/admin/roles', { signal }),
+  ]), [])
+
   const load = useCallback(async (showLoading = true) => {
     if (showLoading) {
       setLoading(true)
       setError('')
     }
     try {
-      const [adminResult, roleResult] = await Promise.all([
-        api<{ items: AdminAccount[] }>('/admin/admins'),
-        api<{ items: AdminRole[] }>('/admin/roles'),
-      ])
+      const [adminResult, roleResult] = await fetchDirectory()
       setItems(adminResult.items)
       setRoles(roleResult.items)
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     } finally { setLoading(false) }
-  }, [])
+  }, [fetchDirectory])
 
-  useEffect(() => { void load(false) }, [load])
+  useEffect(() => {
+    const controller = new AbortController()
+    async function loadDirectory() {
+      try {
+        const [adminResult, roleResult] = await fetchDirectory(controller.signal)
+        setItems(adminResult.items)
+        setRoles(roleResult.items)
+        setError('')
+      } catch (requestError) {
+        if (!controller.signal.aborted) setError(getErrorMessage(requestError))
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void loadDirectory()
+    return () => controller.abort()
+  }, [fetchDirectory])
 
   async function createAdmin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

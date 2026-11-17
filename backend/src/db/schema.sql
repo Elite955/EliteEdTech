@@ -48,6 +48,17 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   PRIMARY KEY (role_id, permission_id)
 );
 
+INSERT INTO permissions (module, action)
+VALUES ('live_classes', 'manage')
+ON CONFLICT (module, action) DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT role.id, permission.id
+FROM admin_roles role
+JOIN permissions permission ON permission.module = 'live_classes' AND permission.action = 'manage'
+WHERE role.code = 'operations_admin'
+ON CONFLICT DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS admin_profiles (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   role_id UUID NOT NULL REFERENCES admin_roles(id),
@@ -115,6 +126,8 @@ CREATE TABLE IF NOT EXISTS class_sessions (
   booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id),
   meeting_provider TEXT NOT NULL DEFAULT 'zoom',
   meeting_url TEXT,
+  meeting_creation_status TEXT NOT NULL DEFAULT 'not_created'
+    CHECK (meeting_creation_status IN ('not_created', 'creating', 'created', 'failed', 'unknown')),
   status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'ongoing', 'completed', 'cancelled')),
   started_at TIMESTAMPTZ,
   ended_at TIMESTAMPTZ,
@@ -122,6 +135,10 @@ CREATE TABLE IF NOT EXISTS class_sessions (
   recording_consent BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE class_sessions
+  ADD COLUMN IF NOT EXISTS meeting_creation_status TEXT NOT NULL DEFAULT 'not_created'
+  CHECK (meeting_creation_status IN ('not_created', 'creating', 'created', 'failed', 'unknown'));
 
 CREATE TABLE IF NOT EXISTS attendance_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -159,6 +176,7 @@ CREATE TABLE IF NOT EXISTS support_tickets (
 
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id UUID,
   recipient_id UUID REFERENCES users(id),
   channel TEXT NOT NULL CHECK (channel IN ('email', 'whatsapp', 'in_app')),
   subject TEXT NOT NULL,
@@ -167,6 +185,15 @@ CREATE TABLE IF NOT EXISTS notifications (
   provider_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS request_id UUID;
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_status_check;
+ALTER TABLE notifications
+  ADD CONSTRAINT notifications_status_check
+  CHECK (status IN ('queued', 'sent', 'failed', 'unknown'));
+
+CREATE UNIQUE INDEX IF NOT EXISTS notifications_request_id_idx
+  ON notifications(request_id) WHERE request_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS managed_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -178,6 +205,20 @@ CREATE TABLE IF NOT EXISTS managed_records (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS payment_refunds (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  payment_id UUID NOT NULL REFERENCES payments(id),
+  provider_refund_id TEXT UNIQUE,
+  amount NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'processed', 'failed', 'unknown')),
+  requested_by UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS payment_refunds_active_payment_idx
+  ON payment_refunds(payment_id) WHERE status IN ('pending', 'processed', 'unknown');
 
 CREATE TABLE IF NOT EXISTS platform_settings (
   key TEXT PRIMARY KEY,

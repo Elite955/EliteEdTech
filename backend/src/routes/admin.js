@@ -1,9 +1,15 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { writeAudit } from '../security/audit.js';
 import { hasPermission, requireAdmin, requirePermission } from '../security/authMiddleware.js';
+import { createFullRefund, getRefundStatus, isRazorpayTestConfigured } from '../integrations/razorpay.js';
+import { getWhatsAppMessageStatus, isAllowedTwilioTestRecipient, isTwilioSandboxConfigured, sendWhatsAppTestMessage } from '../integrations/twilio.js';
+import { ProviderError } from '../integrations/providerError.js';
+import { createTestZoomMeeting, isZoomTestConfigured } from '../integrations/zoom.js';
+import { createPdfReport, createXlsxReport, getAdminSummaryRows } from '../reports/adminSummaryReport.js';
 
 export const adminRouter = Router();
 
@@ -28,6 +34,13 @@ const allowedModules = new Set([
   'revenue_analytics', 'recordings', 'attendance', 'reports', 'activity_logs', 'notifications',
   'templates', 'announcements', 'configuration', 'integrations', 'security', 'backups', 'maintenance',
 ]);
+const providerActionLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 5,
+  keyGenerator: (req) => req.auth.id,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function validationError(res, error) {
   return res.status(400).json({ error: 'The submitted data is invalid.', details: error.issues });
@@ -223,6 +236,337 @@ adminRouter.get('/overview', requireAdmin, requirePermission('dashboard', 'view'
   } catch (error) {
     return next(error);
   }
+});
+
+adminRouter.get('/reports/export', requireAdmin, requirePermission('reports', 'export'), async (req, res, next) => {
+  try {
+    const format = z.enum(['pdf', 'xlsx']).safeParse(req.query.format);
+    if (!format.success) return res.status(400).json({ error: 'Choose a PDF or XLSX report format.' });
+    const rows = await getAdminSummaryRows(pool);
+    const generatedAt = new Date();
+    const contents = format.data === 'pdf'
+      ? await createPdfReport(rows, generatedAt)
+      : await createXlsxReport(rows, generatedAt);
+    const extension = format.data === 'pdf' ? 'pdf' : 'xlsx';
+    const contentType = format.data === 'pdf'
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="admin-summary-${generatedAt.toISOString().slice(0, 10)}.${extension}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    await writeAudit(req, { event: 'admin_report_exported', module: 'reports', details: { format: format.data, rowCount: rows.length } });
+    return res.send(contents);
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post('/transactions/:id/refund', requireAdmin, requirePermission('refunds', 'manage'), providerActionLimiter, async (req, res, next) => {
+  const paymentId = z.string().uuid().safeParse(req.params.id);
+  if (!paymentId.success) return validationError(res, paymentId.error);
+  if (!isRazorpayTestConfigured()) {
+    return res.status(503).json({ error: 'Razorpay refunds are disabled. Configure test credentials and enable test mode.' });
+  }
+  try {
+    const currencyResult = await pool.query(`SELECT value FROM platform_settings WHERE key = 'currency'`);
+    if (currencyResult.rows[0]?.value !== 'INR') {
+      return res.status(409).json({ error: 'Test refunds are currently supported only for INR payments.' });
+    }
+
+    const client = await pool.connect();
+    let payment;
+    let refund;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `SELECT id, provider, provider_transaction_id, amount, status
+         FROM payments WHERE id = $1 FOR UPDATE`,
+        [paymentId.data],
+      );
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Payment not found.' });
+      }
+      payment = result.rows[0];
+      if (payment.provider !== 'razorpay' || !payment.provider_transaction_id) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'This payment does not have a Razorpay transaction to refund.' });
+      }
+      if (payment.status !== 'succeeded') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Only captured payments can be refunded.' });
+      }
+      if (Number(payment.amount) <= 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'This payment does not have a refundable amount.' });
+      }
+      const existingRefund = await client.query(
+        `SELECT id, status FROM payment_refunds
+         WHERE payment_id = $1 AND status IN ('pending', 'processed', 'unknown')`,
+        [payment.id],
+      );
+      if (existingRefund.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: `A refund request already exists with status "${existingRefund.rows[0].status}".` });
+      }
+      const inserted = await client.query(
+        `INSERT INTO payment_refunds (payment_id, amount, status, requested_by)
+         VALUES ($1, $2, 'pending', $3) RETURNING id`,
+        [payment.id, payment.amount, req.auth.id],
+      );
+      refund = inserted.rows[0];
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (error.code === '23505') return res.status(409).json({ error: 'A refund request already exists for this payment.' });
+      throw error;
+    } finally { client.release(); }
+
+    let providerRefund;
+    try {
+      providerRefund = await createFullRefund({
+        paymentId: payment.provider_transaction_id,
+        amount: payment.amount,
+      });
+    } catch (error) {
+      if (!(error instanceof ProviderError)) return next(error);
+      const status = error.outcomeUncertain ? 'unknown' : 'failed';
+      await pool.query(
+        `UPDATE payment_refunds SET status = $2, updated_at = now() WHERE id = $1`,
+        [refund.id, status],
+      );
+      await writeAudit(req, { event: 'razorpay_refund_requested', module: 'refunds', targetId: refund.id, details: { paymentId: payment.id, status } });
+      return res.status(error.status).json({ error: error.message, status });
+    }
+
+    const refundClient = await pool.connect();
+    try {
+      await refundClient.query('BEGIN');
+      await refundClient.query(
+        `UPDATE payment_refunds
+         SET provider_refund_id = $2, status = $3, updated_at = now()
+         WHERE id = $1`,
+        [refund.id, providerRefund.id, providerRefund.status],
+      );
+      if (providerRefund.status === 'processed') {
+        await refundClient.query(`UPDATE payments SET status = 'refunded', updated_at = now() WHERE id = $1`, [payment.id]);
+      }
+      await refundClient.query('COMMIT');
+    } catch (error) {
+      await refundClient.query('ROLLBACK');
+      throw error;
+    } finally { refundClient.release(); }
+
+    await writeAudit(req, {
+      event: 'razorpay_refund_requested',
+      module: 'refunds',
+      targetId: refund.id,
+      details: { paymentId: payment.id, providerRefundId: providerRefund.id, status: providerRefund.status },
+    });
+    return res.status(providerRefund.status === 'pending' ? 202 : 200).json({
+      message: `Razorpay test refund status: ${providerRefund.status}.`,
+      status: providerRefund.status,
+    });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.get('/refunds/:id/status', requireAdmin, requirePermission('refunds', 'manage'), providerActionLimiter, async (req, res, next) => {
+  const refundId = z.string().uuid().safeParse(req.params.id);
+  if (!refundId.success) return validationError(res, refundId.error);
+  if (!isRazorpayTestConfigured()) {
+    return res.status(503).json({ error: 'Razorpay test-mode status checks are disabled.' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT id, payment_id, provider_refund_id, status
+       FROM payment_refunds WHERE id = $1`,
+      [refundId.data],
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'Refund request not found.' });
+    const refund = result.rows[0];
+    if (!refund.provider_refund_id) {
+      return res.status(409).json({ error: 'This refund has no confirmed provider ID and requires manual reconciliation.' });
+    }
+    if (!['pending', 'unknown'].includes(refund.status)) {
+      return res.json({ status: refund.status, unchanged: true });
+    }
+    const providerRefund = await getRefundStatus({ refundId: refund.provider_refund_id });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE payment_refunds SET status = $2, updated_at = now() WHERE id = $1`,
+        [refund.id, providerRefund.status],
+      );
+      if (providerRefund.status === 'processed') {
+        await client.query(`UPDATE payments SET status = 'refunded', updated_at = now() WHERE id = $1`, [refund.payment_id]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { client.release(); }
+    await writeAudit(req, { event: 'razorpay_refund_status_checked', module: 'refunds', targetId: refund.id, details: { status: providerRefund.status } });
+    return res.json({ status: providerRefund.status });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post('/notifications/test-whatsapp', requireAdmin, requirePermission('notifications', 'manage'), providerActionLimiter, async (req, res, next) => {
+  const input = z.object({
+    requestId: z.string().uuid(),
+    to: z.string().regex(/^\+[1-9]\d{7,14}$/),
+    body: z.string().trim().min(1).max(1600),
+  }).safeParse(req.body);
+  if (!input.success) return validationError(res, input.error);
+  if (!isTwilioSandboxConfigured()) {
+    return res.status(503).json({ error: 'WhatsApp sending is disabled. Configure the Twilio sandbox and approved test recipients.' });
+  }
+  if (!isAllowedTwilioTestRecipient(input.data.to)) {
+    return res.status(403).json({ error: 'The recipient is not on the configured test allowlist.' });
+  }
+  try {
+    const inserted = await pool.query(
+      `INSERT INTO notifications (request_id, channel, subject, body, status)
+       VALUES ($1, 'whatsapp', 'Admin sandbox test', $2, 'queued')
+       ON CONFLICT (request_id) WHERE request_id IS NOT NULL DO NOTHING
+       RETURNING id`,
+      [input.data.requestId, input.data.body],
+    );
+    if (!inserted.rowCount) {
+      const existing = await pool.query(
+        `SELECT id, status FROM notifications WHERE request_id = $1`,
+        [input.data.requestId],
+      );
+      return res.json({ id: existing.rows[0].id, status: existing.rows[0].status, duplicateRequest: true });
+    }
+    const notificationId = inserted.rows[0].id;
+    let message;
+    try {
+      message = await sendWhatsAppTestMessage({ to: input.data.to, body: input.data.body });
+    } catch (error) {
+      if (!(error instanceof ProviderError)) return next(error);
+      const status = error.outcomeUncertain ? 'unknown' : 'failed';
+      await pool.query(`UPDATE notifications SET status = $2 WHERE id = $1`, [notificationId, status]);
+      await writeAudit(req, { event: 'whatsapp_test_message_requested', module: 'notifications', targetId: notificationId, details: { status, recipientSuffix: input.data.to.slice(-4) } });
+      return res.status(error.status).json({ error: error.message, status });
+    }
+    const status = ['sent', 'delivered'].includes(message.status) ? 'sent' : 'queued';
+    await pool.query(
+      `UPDATE notifications SET provider_id = $2, status = $3 WHERE id = $1`,
+      [notificationId, message.id, status],
+    );
+    await writeAudit(req, { event: 'whatsapp_test_message_requested', module: 'notifications', targetId: notificationId, details: { status, recipientSuffix: input.data.to.slice(-4) } });
+    return res.status(202).json({ id: notificationId, status });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.get('/notifications/:id/test-status', requireAdmin, requirePermission('notifications', 'manage'), providerActionLimiter, async (req, res, next) => {
+  const notificationId = z.string().uuid().safeParse(req.params.id);
+  if (!notificationId.success) return validationError(res, notificationId.error);
+  if (!isTwilioSandboxConfigured()) {
+    return res.status(503).json({ error: 'Twilio sandbox status checks are disabled.' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT id, provider_id, status FROM notifications
+       WHERE id = $1 AND channel = 'whatsapp'`,
+      [notificationId.data],
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'WhatsApp notification not found.' });
+    const notification = result.rows[0];
+    if (!notification.provider_id) {
+      return res.status(409).json({ error: 'This message has no confirmed provider ID and requires manual reconciliation.' });
+    }
+    if (!['queued', 'unknown'].includes(notification.status)) {
+      return res.json({ status: notification.status, unchanged: true });
+    }
+    const providerMessage = await getWhatsAppMessageStatus({ messageId: notification.provider_id });
+    const providerStatus = providerMessage.status.toLowerCase();
+    const status = ['sent', 'delivered'].includes(providerStatus)
+      ? 'sent'
+      : ['failed', 'undelivered', 'canceled'].includes(providerStatus)
+        ? 'failed'
+        : ['queued', 'accepted', 'sending'].includes(providerStatus)
+          ? 'queued'
+          : 'unknown';
+    await pool.query(`UPDATE notifications SET status = $2 WHERE id = $1`, [notification.id, status]);
+    await writeAudit(req, { event: 'whatsapp_test_message_status_checked', module: 'notifications', targetId: notification.id, details: { status } });
+    return res.json({ status });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post('/live-classes/:id/test-meeting', requireAdmin, requirePermission('live_classes', 'manage'), providerActionLimiter, async (req, res, next) => {
+  const sessionId = z.string().uuid().safeParse(req.params.id);
+  if (!sessionId.success) return validationError(res, sessionId.error);
+  if (!isZoomTestConfigured()) {
+    return res.status(503).json({ error: 'Zoom meeting creation is disabled. Configure a test account and enable test mode.' });
+  }
+  try {
+    const client = await pool.connect();
+    let session;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `SELECT cs.id, cs.status, cs.meeting_url, cs.meeting_creation_status,
+                b.id AS booking_id, b.starts_at, b.ends_at
+         FROM class_sessions cs JOIN bookings b ON b.id = cs.booking_id
+         WHERE cs.id = $1 FOR UPDATE OF cs`,
+        [sessionId.data],
+      );
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Class session not found.' });
+      }
+      session = result.rows[0];
+      if (session.status !== 'scheduled') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'A test meeting can only be created for a scheduled class.' });
+      }
+      if (session.meeting_url || ['creating', 'created', 'unknown'].includes(session.meeting_creation_status)) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: `Meeting creation cannot be repeated while its status is "${session.meeting_creation_status}".` });
+      }
+      if (new Date(session.starts_at) <= new Date()) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'A test meeting can only be created before the class start time.' });
+      }
+      const durationMinutes = Math.ceil((new Date(session.ends_at) - new Date(session.starts_at)) / 60000);
+      if (durationMinutes < 1 || durationMinutes > 480) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: "The scheduled class duration is outside Zoom's supported range." });
+      }
+      await client.query(
+        `UPDATE class_sessions SET meeting_creation_status = 'creating' WHERE id = $1`,
+        [session.id],
+      );
+      await client.query('COMMIT');
+      session.durationMinutes = durationMinutes;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { client.release(); }
+
+    let meeting;
+    try {
+      meeting = await createTestZoomMeeting({
+        topic: `EdTech class ${session.booking_id}`,
+        startTime: new Date(session.starts_at).toISOString(),
+        durationMinutes: session.durationMinutes,
+      });
+    } catch (error) {
+      if (!(error instanceof ProviderError)) return next(error);
+      const status = error.outcomeUncertain ? 'unknown' : 'failed';
+      await pool.query(`UPDATE class_sessions SET meeting_creation_status = $2 WHERE id = $1`, [session.id, status]);
+      await writeAudit(req, { event: 'zoom_test_meeting_requested', module: 'live_classes', targetId: session.id, details: { status } });
+      return res.status(error.status).json({ error: error.message, status });
+    }
+    await pool.query(
+      `UPDATE class_sessions
+       SET meeting_provider = 'zoom', meeting_url = $2, meeting_creation_status = 'created'
+       WHERE id = $1 AND meeting_creation_status = 'creating'`,
+      [session.id, meeting.joinUrl],
+    );
+    await writeAudit(req, { event: 'zoom_test_meeting_requested', module: 'live_classes', targetId: session.id, details: { status: 'created' } });
+    return res.status(201).json({ id: meeting.id, status: 'created', joinUrl: meeting.joinUrl });
+  } catch (error) { return next(error); }
 });
 
 adminRouter.get('/search', requireAdmin, async (req, res, next) => {
@@ -548,7 +892,9 @@ async function moduleRows(module) {
     case 'live_classes':
       return (await pool.query(
         `SELECT cs.id, b.id::text AS title, cs.status, cs.created_at,
-          jsonb_build_object('meetingProvider', cs.meeting_provider, 'startedAt', cs.started_at, 'endedAt', cs.ended_at, 'recordingConsent', cs.recording_consent) AS data
+          jsonb_build_object('meetingProvider', cs.meeting_provider, 'meetingUrl', cs.meeting_url,
+            'meetingCreationStatus', cs.meeting_creation_status, 'startedAt', cs.started_at,
+            'endedAt', cs.ended_at, 'recordingConsent', cs.recording_consent) AS data
          FROM class_sessions cs JOIN bookings b ON b.id = cs.booking_id
          ORDER BY cs.created_at DESC LIMIT 200`,
       )).rows;
@@ -566,12 +912,19 @@ async function moduleRows(module) {
          FROM support_tickets t ORDER BY t.created_at DESC LIMIT 200`,
       )).rows;
     case 'transactions':
-    case 'refunds':
       return (await pool.query(
         `SELECT p.id, COALESCE(p.provider_transaction_id, p.id::text) AS title, p.status, p.created_at,
-          jsonb_build_object('provider', p.provider, 'amount', p.amount, 'bookingId', p.booking_id, 'studentId', p.student_id) AS data
-         FROM payments p ${module === 'refunds' ? "WHERE p.status = 'refunded'" : ''}
-         ORDER BY p.created_at DESC LIMIT 200`,
+          jsonb_build_object('provider', p.provider, 'providerTransactionId', p.provider_transaction_id,
+            'amount', p.amount, 'bookingId', p.booking_id, 'studentId', p.student_id) AS data
+         FROM payments p ORDER BY p.created_at DESC LIMIT 200`,
+      )).rows;
+    case 'refunds':
+      return (await pool.query(
+        `SELECT r.id, COALESCE(r.provider_refund_id, p.provider_transaction_id, p.id::text) AS title,
+          r.status, r.created_at,
+          jsonb_build_object('amount', r.amount, 'paymentId', p.id, 'providerRefundId', r.provider_refund_id) AS data
+         FROM payment_refunds r JOIN payments p ON p.id = r.payment_id
+         ORDER BY r.created_at DESC LIMIT 200`,
       )).rows;
     case 'revenue_analytics':
       return (await pool.query(
@@ -618,10 +971,10 @@ async function moduleRows(module) {
     case 'integrations':
       return [
         { id: 'database', title: 'PostgreSQL', status: process.env.DATABASE_URL ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'PostgreSQL', credentialsPresent: Boolean(process.env.DATABASE_URL) } },
-        { id: 'payments', title: 'Razorpay test mode', status: process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'Razorpay', mode: 'Test credentials only', credentialsPresent: Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET), capabilities: 'Payment actions are not wired to the provider yet.' } },
-        { id: 'zoom', title: 'Zoom meetings', status: process.env.ZOOM_CLIENT_ID && process.env.ZOOM_CLIENT_SECRET ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'Zoom', credentialsPresent: Boolean(process.env.ZOOM_CLIENT_ID && process.env.ZOOM_CLIENT_SECRET), capabilities: 'Meeting creation is not wired to the provider yet.' } },
+        { id: 'payments', title: 'Razorpay test mode', status: isRazorpayTestConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Razorpay', testMode: isRazorpayTestConfigured(), capabilities: 'Full test-mode refunds only; live keys and production requests are disabled.' } },
+        { id: 'zoom', title: 'Zoom test meetings', status: isZoomTestConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Zoom', testMode: isZoomTestConfigured(), capabilities: 'Meeting creation requires explicit test mode and development environment.' } },
         { id: 'email', title: 'Nodemailer SMTP', status: process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'Nodemailer', credentialsPresent: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD), capabilities: 'Password reset email is implemented; bulk notifications are not.' } },
-        { id: 'whatsapp', title: 'Twilio WhatsApp sandbox', status: process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'Twilio sandbox', credentialsPresent: Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN), capabilities: 'Outbound messaging is not wired to the provider yet.' } },
+        { id: 'whatsapp', title: 'Twilio WhatsApp sandbox', status: isTwilioSandboxConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Twilio sandbox', testMode: isTwilioSandboxConfigured(), capabilities: 'Sandbox messages are restricted to configured allowlisted test recipients.' } },
       ];
     case 'configuration':
     case 'maintenance':
