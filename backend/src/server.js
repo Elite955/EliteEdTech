@@ -9,6 +9,9 @@ import { Server as SocketServer } from 'socket.io';
 import { pool } from './db/pool.js';
 import { authRouter } from './routes/auth.js';
 import { adminRouter } from './routes/admin.js';
+import { studentRouter } from './routes/student.js';
+import { teacherRouter } from './routes/teacher.js';
+import { censorContent } from './security/profanity.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must be set to a random value of at least 32 characters.');
@@ -24,6 +27,7 @@ const io = new SocketServer(server, {
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
 app.use(helmet());
 app.use(cors({ origin, credentials: true }));
+app.use('/api/payments/webhook', express.raw({ type: 'application/json', limit: '256kb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
@@ -37,6 +41,8 @@ app.get('/api/health', async (_req, res, next) => {
 });
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api', studentRouter);
+app.use('/api/teacher', teacherRouter);
 
 app.use((_req, res) => res.status(404).json({ error: 'API route not found.' }));
 app.use((error, _req, res, _next) => {
@@ -59,7 +65,8 @@ io.use(async (socket, next) => {
     if (!token) return next(new Error('Authentication required.'));
     const claims = jwt.verify(token, process.env.JWT_SECRET);
     if (claims.type !== 'session') return next(new Error('Authentication required.'));
-    const result = await pool.query(
+
+    const adminResult = await pool.query(
       `SELECT u.id FROM admin_sessions s
        JOIN users u ON u.id = s.user_id
        JOIN admin_profiles ap ON ap.user_id = u.id
@@ -70,20 +77,94 @@ io.use(async (socket, next) => {
          AND u.status = 'active' AND p.module = 'chat_moderation' AND p.action = 'view'`,
       [claims.sid, claims.sub],
     );
-    if (!result.rowCount) return next(new Error('Chat moderation access is not authorized.'));
-    socket.data.adminId = result.rows[0].id;
+    if (adminResult.rowCount) {
+      socket.data.kind = 'moderator';
+      socket.data.adminId = adminResult.rows[0].id;
+      return next();
+    }
+
+    const studentResult = await pool.query(
+      `SELECT u.id, u.name, u.status, u.role, sp.age
+       FROM user_sessions s
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN student_profiles sp ON sp.user_id = u.id
+        WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL AND s.expires_at > now()
+          AND u.status = 'active' AND u.role IN ('student', 'teacher')`,
+      [claims.sid, claims.sub],
+    );
+    if (!studentResult.rowCount) return next(new Error('Chat access is not authorized.'));
+    const student = studentResult.rows[0];
+    socket.data.kind = 'student';
+    socket.data.userId = student.id;
+    socket.data.userName = student.name;
+    socket.data.age = student.age ?? null;
     return next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       return next(new Error('Authentication required.'));
     }
     console.error('Socket authorization failed:', error.message);
-    return next(new Error('Chat moderation authorization is temporarily unavailable.'));
+    return next(new Error('Chat authorization is temporarily unavailable.'));
   }
 });
 
 io.on('connection', (socket) => {
-  socket.join('admin-chat-moderation');
+  if (socket.data.kind === 'moderator') {
+    socket.join('admin-chat-moderation');
+    return;
+  }
+  socket.join('global');
+  socket.emit('chat:ready', { room: 'global' });
+
+  socket.on('chat:message', async (payload, callback) => {
+    try {
+      if (socket.data.kind !== 'student') return;
+      const room = typeof payload?.room === 'string' ? payload.room : '';
+      const content = typeof payload?.content === 'string' ? payload.content.trim() : '';
+      if (room !== 'global' || content.length < 1 || content.length > 500) {
+        socket.emit('chat:error', { message: 'Messages must be 1-500 characters in the global room.' });
+        callback?.({ ok: false });
+        return;
+      }
+      const { rows: senderRows } = await pool.query(
+        `SELECT u.status, sp.age FROM users u LEFT JOIN student_profiles sp ON sp.user_id = u.id WHERE u.id = $1`,
+        [socket.data.userId],
+      );
+      const sender = senderRows[0];
+      if (!sender || sender.status !== 'active') {
+        socket.emit('chat:error', { message: 'Your account can no longer send messages.' });
+        callback?.({ ok: false });
+        return;
+      }
+      const needsCensor = sender.age !== null && sender.age >= 10 && sender.age <= 12;
+      const finalContent = needsCensor ? censorContent(content) : content;
+
+      const { rows: inserted } = await pool.query(
+        `INSERT INTO chat_messages (sender_id, room, content) VALUES ($1, 'global', $2)
+         RETURNING id, created_at`,
+        [socket.data.userId, finalContent],
+      );
+      const message = {
+        id: inserted[0].id,
+        room: 'global',
+        sender_id: socket.data.userId,
+        sender_name: socket.data.userName,
+        content: finalContent,
+        created_at: inserted[0].created_at,
+      };
+      io.to('global').emit('chat:message:new', message);
+      io.to('admin-chat-moderation').emit('chat:new', {
+        ...message,
+        age: needsCensor ? sender.age : socket.data.age,
+        censored: needsCensor,
+      });
+      callback?.({ ok: true, id: message.id });
+    } catch (error) {
+      console.error('Chat message handling failed:', error.message);
+      socket.emit('chat:error', { message: 'The message could not be sent. Try again.' });
+      callback?.({ ok: false });
+    }
+  });
 });
 
 const port = Number(process.env.API_PORT || 4000);
