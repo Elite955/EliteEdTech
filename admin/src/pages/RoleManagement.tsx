@@ -42,16 +42,18 @@ export function RoleManagement() {
   const selected = roles.find((role) => role.id === selectedId)
   const modules = useMemo(() => [...new Set(catalog.map((permission) => permission.module))], [catalog])
 
+  const fetchRoleData = useCallback((signal?: AbortSignal) => Promise.all([
+    api<{ items: Role[] }>('/admin/roles', { signal }),
+    api<{ items: Permission[] }>('/admin/permissions', { signal }),
+  ]), [])
+
   const load = useCallback(async (showLoading = true) => {
     if (showLoading) {
       setLoading(true)
       setError('')
     }
     try {
-      const [roleResult, permissionResult] = await Promise.all([
-        api<{ items: Role[] }>('/admin/roles'),
-        api<{ items: Permission[] }>('/admin/permissions'),
-      ])
+      const [roleResult, permissionResult] = await fetchRoleData()
       setRoles(roleResult.items)
       setCatalog(permissionResult.items)
       const nextId = roleResult.items.some((role) => role.id === selectedIdRef.current) ? selectedIdRef.current : roleResult.items[0]?.id ?? ''
@@ -60,9 +62,29 @@ export function RoleManagement() {
       setDraft(roleResult.items.find((role) => role.id === nextId)?.permissions ?? [])
     } catch (requestError) { setError(getErrorMessage(requestError)) }
     finally { setLoading(false) }
-  }, [])
+  }, [fetchRoleData])
 
-  useEffect(() => { void load(false) }, [load])
+  useEffect(() => {
+    const controller = new AbortController()
+    async function loadRoles() {
+      try {
+        const [roleResult, permissionResult] = await fetchRoleData(controller.signal)
+        setRoles(roleResult.items)
+        setCatalog(permissionResult.items)
+        const nextId = roleResult.items.some((role) => role.id === selectedIdRef.current) ? selectedIdRef.current : roleResult.items[0]?.id ?? ''
+        selectedIdRef.current = nextId
+        setSelectedId(nextId)
+        setDraft(roleResult.items.find((role) => role.id === nextId)?.permissions ?? [])
+        setError('')
+      } catch (requestError) {
+        if (!controller.signal.aborted) setError(getErrorMessage(requestError))
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void loadRoles()
+    return () => controller.abort()
+  }, [fetchRoleData])
 
   function togglePermission(module: string, action: string) {
     setDraft((current) => current.some((item) => item.module === module && item.action === action)

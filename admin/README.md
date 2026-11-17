@@ -1,32 +1,34 @@
-# React + TypeScript + Vite
+# EdTech Admin
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The admin web application is a React, TypeScript, and Vite client. The API and database setup are documented in the repository-root [README](../README.md); follow those steps first to configure `.env`, initialize PostgreSQL, and start the backend.
 
-Currently, two official plugins are available:
+## Run the admin client
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+From the repository root, install the client dependencies and start Vite:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+Set-Location admin
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Open `http://localhost:5173`. Vite proxies `/api` and Socket.IO requests to the local API on port `4000`.
+
+## Checks
+
+Run these commands from the `admin` directory:
+
+```powershell
+npm run build
+npm run lint
+```
+
+Run backend tests from `backend` with `npm test`.
+
+## Authentication and configuration
+
+All roles use the shared sign-in page. Administrator accounts must enroll an authenticator app on first sign-in and provide a one-time code on later sign-ins. Student and teacher routes currently lead to placeholder workspaces.
+
+Keep credentials and provider secrets in the backend's root `.env` file. Never add secrets to the client or commit `.env`. The Integrations screen reports test-mode readiness only; it never displays secret values.
+
+The admin summary can be downloaded as PDF or XLSX. Razorpay full refunds accept only test keys (`rzp_test_`) with `RAZORPAY_TEST_MODE=true`; Twilio sends only through the WhatsApp sandbox to numbers in `TWILIO_TEST_RECIPIENTS`; Zoom meeting creation requires `ZOOM_TEST_MODE=true` and a dedicated test account. These actions are disabled outside `development`/`test` and are never called during setup or automated tests. Do not enable test flags in production. Backup execution and user impersonation remain disabled until their policies are approved.

@@ -23,6 +23,7 @@ function actionsFor(role, module) {
   if (role.code === 'finance_admin') return ['view', 'export', ...(module === 'refunds' || module === 'payouts' ? ['manage'] : [])];
   if (role.code === 'moderator') return ['view', 'edit', 'manage'];
   if (role.code === 'support_admin') return module === 'support' ? ['view', 'create', 'edit', 'manage'] : ['view'];
+  if (module === 'live_classes') return ['view', 'create', 'edit', 'approve', 'reject', 'export', 'manage'];
   if (module === 'dashboard') return ['view'];
   return ['view', 'create', 'edit', 'approve', 'reject', 'export'];
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
-import { FileText, Pencil, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { Download, FileText, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, Search, Video, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import { api, getErrorMessage } from '../lib/api'
 
@@ -8,24 +8,24 @@ type ModuleRecord = { id: string; title: string; status: string; created_at: str
 
 const moduleInfo: Record<string, { title: string; description: string; editable?: boolean; statuses?: string[] }> = {
   bookings: { title: 'Bookings', description: 'Review booking requests, class schedules, and booking status.', statuses: ['pending', 'approved', 'rejected', 'paid', 'completed', 'cancelled'] },
-  live_classes: { title: 'Live classes', description: 'Monitor scheduled and ongoing Zoom sessions. Emergency termination is logged.', statuses: ['scheduled', 'ongoing', 'completed', 'cancelled'] },
+  live_classes: { title: 'Live classes', description: 'Monitor scheduled and ongoing sessions. Test-account Zoom meeting creation is opt-in and disabled in production.', statuses: ['scheduled', 'ongoing', 'completed', 'cancelled'] },
   chat_moderation: { title: 'Global chat moderation', description: 'Review messages that authorized moderators are permitted to access.', statuses: ['visible', 'hidden', 'deleted'] },
   support: { title: 'Support & complaints', description: 'Track user issues, prioritize complaints, and update ticket status.', statuses: ['open', 'in_progress', 'resolved', 'closed'], editable: true },
-  transactions: { title: 'Transactions', description: 'Read-only transaction history. Razorpay actions require configured provider credentials.' },
-  refunds: { title: 'Refunds', description: 'Refund records are read-only until Razorpay test credentials and refund approval workflow are configured.' },
+  transactions: { title: 'Transactions', description: 'Review payment records. Finance Admins can request a full Razorpay test refund for eligible payments.' },
+  refunds: { title: 'Refunds', description: 'Review full-refund requests sent through explicitly enabled Razorpay test mode.' },
   payouts: { title: 'Teacher payouts', description: 'Payouts are not initiated by the admin console. Connect the approved financial provider before enabling payouts.' },
   revenue_analytics: { title: 'Revenue analytics', description: 'Revenue summaries are based on recorded payment rows; no external payment data is fabricated.' },
   recordings: { title: 'Recordings', description: 'Only recordings with recorded participant consent are listed.' },
   attendance: { title: 'Attendance', description: 'Class attendance records supplied by the session workflow.' },
-  reports: { title: 'Reports & analytics', description: 'Create report definitions and review generated report records.', editable: true },
+  reports: { title: 'Reports & analytics', description: 'Download an aggregate admin-operations summary as PDF or XLSX; review report definitions here.', editable: true },
   activity_logs: { title: 'Administrative activity logs', description: 'A chronological audit trail of administrative actions.' },
-  notifications: { title: 'Notification centre', description: 'Review notification delivery status. Sending requires configured provider credentials.' },
+  notifications: { title: 'Notification centre', description: 'Review delivery status and send a single test message to an explicitly allowlisted Twilio sandbox recipient.' },
   announcements: { title: 'Announcements', description: 'Create announcement records. Delivery is not sent until a notification provider workflow is configured.', editable: true },
   templates: { title: 'Message templates', description: 'Manage reusable email and WhatsApp message template records.', editable: true },
   configuration: { title: 'Platform configuration', description: 'Manage selected non-secret platform settings. Secrets belong in environment configuration, never here.' },
-  integrations: { title: 'Integrations', description: 'Provider readiness is checked from environment configuration; secrets are never displayed.' },
+  integrations: { title: 'Integrations', description: 'Provider test-mode readiness is checked from environment configuration; secrets are never displayed.' },
   security: { title: 'Security management', description: 'Review security events and administrative access activity.' },
-  backups: { title: 'Backup management', description: 'Backup status is not connected to a provider. No backup is claimed unless an integration reports it.' },
+  backups: { title: 'Backup management', description: 'Backup execution is disabled until a secured storage target and retention policy are approved.' },
   maintenance: { title: 'Maintenance mode', description: 'Manage the maintenance flag. Changes do not affect the public platform until its service consumes this setting.' },
 }
 
@@ -52,11 +52,22 @@ export function ModulePage() {
   const [editingItem, setEditingItem] = useState<ModuleRecord | null>(null)
   const [editValue, setEditValue] = useState('')
   const [form, setForm] = useState({ title: '', status: 'active', description: '' })
+  const [whatsAppForm, setWhatsAppForm] = useState({ to: '', body: '' })
+  const [exporting, setExporting] = useState('')
   const canEdit = can(module, ['live_classes', 'chat_moderation', 'configuration', 'maintenance'].includes(module) ? 'manage' : 'edit')
+  const canRefund = module === 'transactions' && can('refunds', 'manage')
+  const canCreateMeeting = module === 'live_classes' && can('live_classes', 'manage')
+  const canRefreshRefund = module === 'refunds' && can('refunds', 'manage')
+  const canRefreshNotification = module === 'notifications' && can('notifications', 'manage')
+  const canExportReport = module === 'reports' && can('reports', 'export')
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
     return query ? items.filter((item) => `${item.title} ${item.status} ${JSON.stringify(item.data ?? {})}`.toLowerCase().includes(query)) : items
   }, [items, search])
+
+  const fetchRecords = useCallback((signal?: AbortSignal) => (
+    api<{ items: ModuleRecord[] }>(`/admin/modules/${module}`, { signal })
+  ), [module])
 
   const load = useCallback(async (showLoading = true) => {
     if (!info) return
@@ -65,13 +76,29 @@ export function ModulePage() {
       setError('')
     }
     try {
-      const result = await api<{ items: ModuleRecord[] }>(`/admin/modules/${module}`)
+      const result = await fetchRecords()
       setItems(result.items)
     } catch (requestError) { setError(getErrorMessage(requestError)) }
     finally { setLoading(false) }
-  }, [module, info])
+  }, [fetchRecords, info])
 
-  useEffect(() => { void load(false) }, [load])
+  useEffect(() => {
+    if (!info) return
+    const controller = new AbortController()
+    async function loadRecords() {
+      try {
+        const result = await fetchRecords(controller.signal)
+        setItems(result.items)
+        setError('')
+      } catch (requestError) {
+        if (!controller.signal.aborted) setError(getErrorMessage(requestError))
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void loadRecords()
+    return () => controller.abort()
+  }, [fetchRecords, info])
 
   async function changeStatus(item: ModuleRecord, status: string) {
     const destructive = status === 'cancelled' || status === 'deleted'
@@ -127,8 +154,102 @@ export function ModulePage() {
     finally { setSaving(false) }
   }
 
+  async function downloadReport(format: 'pdf' | 'xlsx') {
+    setExporting(format)
+    setError('')
+    try {
+      const response = await fetch(`/api/admin/reports/export?format=${format}`, { credentials: 'include' })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null
+        throw new Error(payload?.error ?? `Report download failed (${response.status}).`)
+      }
+      const url = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `admin-summary.${format}`
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 0)
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally { setExporting('') }
+  }
+
+  async function sendTestWhatsApp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!window.confirm(`Queue a WhatsApp sandbox test message to ${whatsAppForm.to}? Only server-allowlisted test recipients are accepted.`)) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api<{ status: string }>('/admin/notifications/test-whatsapp', {
+        method: 'POST',
+        body: JSON.stringify({ ...whatsAppForm, requestId: crypto.randomUUID() }),
+      })
+      setNotice(`WhatsApp test message status: ${result.status}.`)
+      setWhatsAppForm((current) => ({ ...current, body: '' }))
+      await load()
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally { setSaving(false) }
+  }
+
+  async function requestTestRefund(item: ModuleRecord) {
+    if (!window.confirm(`Request a full test-mode refund for payment ${item.title}? This cannot be undone in the provider test account.`)) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api<{ message: string }>(`/admin/transactions/${item.id}/refund`, { method: 'POST' })
+      setNotice(result.message)
+      await load()
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally { setSaving(false) }
+  }
+
+  async function refreshRefundStatus(item: ModuleRecord) {
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api<{ status: string }>(`/admin/refunds/${item.id}/status`)
+      setNotice(`Refund status: ${result.status}.`)
+      await load()
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally { setSaving(false) }
+  }
+
+  async function refreshWhatsAppStatus(item: ModuleRecord) {
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api<{ status: string }>(`/admin/notifications/${item.id}/test-status`)
+      setNotice(`WhatsApp message status: ${result.status}.`)
+      await load()
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally { setSaving(false) }
+  }
+
+  async function createTestMeeting(item: ModuleRecord) {
+    if (!window.confirm(`Create a Zoom meeting in the configured test account for "${item.title}"?`)) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api<{ joinUrl: string }>(`/admin/live-classes/${item.id}/test-meeting`, { method: 'POST' })
+      setNotice(`Test meeting created: ${result.joinUrl}`)
+      await load()
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    } finally { setSaving(false) }
+  }
+
   if (!info) return <div className="alert alert-error">This admin module is not recognized.</div>
   const canCreate = info.editable && editableModules.has(module) && can(module, 'create')
+  const hasRowActions = canRefund || canCreateMeeting || canRefreshRefund || canRefreshNotification
 
   return (
     <div className="module-page">
@@ -136,18 +257,28 @@ export function ModulePage() {
         <div><p className="eyebrow">PLATFORM OPERATIONS</p><h2>{info.title}</h2><p>{info.description}</p></div>
         <div className="intro-actions">
           <button className="secondary-button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} /> Refresh</button>
+          {canExportReport && <><button className="secondary-button" onClick={() => void downloadReport('xlsx')} disabled={Boolean(exporting)}><Download size={15} /> {exporting === 'xlsx' ? 'Preparing…' : 'Download XLSX'}</button><button className="secondary-button" onClick={() => void downloadReport('pdf')} disabled={Boolean(exporting)}><Download size={15} /> {exporting === 'pdf' ? 'Preparing…' : 'Download PDF'}</button></>}
           {canCreate && <button className="primary-button" onClick={() => setDialogOpen(true)}><Plus size={17} /> Add record</button>}
         </div>
       </div>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
       {notice && <div role="status" className="alert alert-success">{notice}</div>}
+      {module === 'notifications' && can('notifications', 'manage') && (
+        <form className="panel dialog-form" onSubmit={(event) => void sendTestWhatsApp(event)}>
+          <div className="dialog-heading"><div><p className="eyebrow">TEST MODE ONLY</p><h3>Send WhatsApp sandbox message</h3></div><MessageCircle size={18} /></div>
+          <label>Approved test recipient (E.164)<input type="tel" required pattern="\+[1-9][0-9]{7,14}" placeholder="+15551234567" value={whatsAppForm.to} onChange={(event) => setWhatsAppForm({ ...whatsAppForm, to: event.target.value })} /></label>
+          <label>Message<textarea required maxLength={1600} rows={3} value={whatsAppForm.body} onChange={(event) => setWhatsAppForm({ ...whatsAppForm, body: event.target.value })} /></label>
+          <small>The backend rejects recipients not explicitly listed in `TWILIO_TEST_RECIPIENTS`. Network errors are marked unknown to avoid accidental duplicate sends.</small>
+          <button type="submit" className="primary-button" disabled={saving}><MessageCircle size={15} /> {saving ? 'Sending…' : 'Send test message'}</button>
+        </form>
+      )}
       <section className="panel data-panel">
         <div className="table-toolbar">
           <div className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${info.title.toLowerCase()}`} aria-label={`Search ${info.title}`} /></div>
           <span className="result-count">{loading ? 'Loading…' : `${filtered.length} records`}</span>
         </div>
         <div className="table-scroll"><table>
-          <thead><tr><th>Record</th><th>Status</th><th>Details</th><th>Created</th>{canEdit && (info.statuses || module === 'configuration' || module === 'maintenance') && <th className="align-right">Update</th>}</tr></thead>
+          <thead><tr><th>Record</th><th>Status</th><th>Details</th><th>Created</th>{canEdit && (info.statuses || module === 'configuration' || module === 'maintenance') && <th className="align-right">Update</th>}{hasRowActions && <th className="align-right">Actions</th>}</tr></thead>
           <tbody>
             {filtered.map((item) => (
               <tr key={item.id}>
@@ -157,10 +288,16 @@ export function ModulePage() {
                 <td>{item.created_at ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(item.created_at)) : '—'}</td>
                 {canEdit && info.statuses && <td className="align-right"><select className="table-select" aria-label={`Update status for ${item.title}`} value={item.status} onChange={(event) => void changeStatus(item, event.target.value)}>{info.statuses.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}</select></td>}
                 {canEdit && (module === 'configuration' || module === 'maintenance') && <td className="align-right"><button className="table-action" onClick={() => { setEditingItem(item); setEditValue(JSON.stringify(item.data?.value ?? null, null, 2)); setError('') }}><Pencil size={12} /> Edit value</button></td>}
+                {hasRowActions && <td className="align-right">
+                  {canRefund && item.status === 'succeeded' && item.data?.provider === 'razorpay' && Boolean(item.data?.providerTransactionId) && <button className="table-action danger-action" disabled={saving} onClick={() => void requestTestRefund(item)}><RotateCcw size={12} /> Full test refund</button>}
+                  {canCreateMeeting && item.status === 'scheduled' && !item.data?.meetingUrl && !['creating', 'created', 'unknown'].includes(String(item.data?.meetingCreationStatus)) && <button className="table-action" disabled={saving} onClick={() => void createTestMeeting(item)}><Video size={12} /> Create test meeting</button>}
+                  {canRefreshRefund && ['pending', 'unknown'].includes(item.status) && Boolean(item.data?.providerRefundId) && <button className="table-action" disabled={saving} onClick={() => void refreshRefundStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
+                  {canRefreshNotification && ['queued', 'unknown'].includes(item.status) && Boolean(item.data?.providerId) && <button className="table-action" disabled={saving} onClick={() => void refreshWhatsAppStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
+                </td>}
               </tr>
             ))}
-            {!loading && filtered.length === 0 && <tr><td colSpan={canEdit && (info.statuses || module === 'configuration' || module === 'maintenance') ? 5 : 4}><div className="table-empty"><FileText size={25} /><strong>No records available</strong><span>Records appear here when the connected platform workflow creates them.</span></div></td></tr>}
-            {loading && <tr><td colSpan={canEdit && (info.statuses || module === 'configuration' || module === 'maintenance') ? 5 : 4}><div className="table-empty"><span className="spinner" /> Loading records…</div></td></tr>}
+            {!loading && filtered.length === 0 && <tr><td colSpan={(canEdit && (info.statuses || module === 'configuration' || module === 'maintenance') ? 5 : 4) + (hasRowActions ? 1 : 0)}><div className="table-empty"><FileText size={25} /><strong>No records available</strong><span>Records appear here when the connected platform workflow creates them.</span></div></td></tr>}
+            {loading && <tr><td colSpan={(canEdit && (info.statuses || module === 'configuration' || module === 'maintenance') ? 5 : 4) + (hasRowActions ? 1 : 0)}><div className="table-empty"><span className="spinner" /> Loading records…</div></td></tr>}
           </tbody>
         </table></div>
       </section>
