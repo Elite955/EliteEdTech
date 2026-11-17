@@ -3,7 +3,7 @@ import { AuthProvider } from './auth/AuthContext'
 import { homePathForUser } from './auth/roleRoutes'
 import { useAuth } from './auth/useAuth'
 import { AdminLayout } from './components/AdminLayout'
-import { AdminDirectory, Dashboard, LoginPage, ModulePage, PasswordResetPage, RoleLandingPage, RoleManagement, UserDirectory } from './pages'
+import { ActiveSessionsPage, AdminDirectory, Dashboard, LoginPage, ModulePage, PasswordResetPage, RoleLandingPage, RoleManagement, UserDirectory } from './pages'
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth()
@@ -39,6 +39,7 @@ function App() {
             <Route path="/teachers" element={<UserDirectory role="teacher" />} />
             <Route path="/admins" element={<AdminDirectory />} />
             <Route path="/roles" element={<RoleManagement />} />
+            <Route path="/sessions" element={<ActiveSessionsPage />} />
             <Route path="/modules/:module" element={<ModulePage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

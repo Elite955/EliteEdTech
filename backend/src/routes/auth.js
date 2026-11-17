@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { rateLimit } from 'express-rate-limit';
-import nodemailer from 'nodemailer';
 import { generateSecret, generateSync, generateURI, verifySync } from 'otplib';
 import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { decryptField, encryptField } from '../security/fieldEncryption.js';
 import { writeAudit } from '../security/audit.js';
 import { requireAuthenticatedUser } from '../security/authMiddleware.js';
+import { isPasswordResetConfigured, sendPasswordResetEmail } from '../security/passwordReset.js';
 
 export const authRouter = Router();
 
@@ -49,8 +49,8 @@ async function createSession(req, res, userId, rememberMe = false) {
     [userId],
   );
   await pool.query(
-    `INSERT INTO admin_sessions (id, user_id, expires_at, ip_address, user_agent)
-     VALUES ($1, $2, $3, $4, $5)`,
+    `INSERT INTO admin_sessions (id, user_id, expires_at, ip_address, user_agent, last_seen_at)
+     VALUES ($1, $2, $3, $4, $5, now())`,
     [sessionId, userId, expiresAt, req.ip, req.get('user-agent') ?? null],
   );
   const token = jwt.sign({ sub: userId, sid: sessionId, type: 'session' }, process.env.JWT_SECRET, { expiresIn: rememberMe ? '30d' : '8h' });
@@ -84,8 +84,8 @@ async function createUserSession(req, res, userId, rememberMe = false) {
     [userId],
   );
   await pool.query(
-    `INSERT INTO user_sessions (id, user_id, expires_at, ip_address, user_agent)
-     VALUES ($1, $2, $3, $4, $5)`,
+    `INSERT INTO user_sessions (id, user_id, expires_at, ip_address, user_agent, last_seen_at)
+     VALUES ($1, $2, $3, $4, $5, now())`,
     [sessionId, userId, expiresAt, req.ip, req.get('user-agent') ?? null],
   );
   const token = jwt.sign({ sub: userId, sid: sessionId, type: 'session' }, process.env.JWT_SECRET, { expiresIn: rememberMe ? '30d' : '8h' });
@@ -268,52 +268,15 @@ authRouter.post('/password-reset/request', loginLimiter, async (req, res, next) 
   try {
     const input = resetRequestSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json({ error: 'Enter a valid account email address.' });
-    const { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_FROM } = process.env;
-    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD || !SMTP_FROM) {
+    if (!isPasswordResetConfigured()) {
       return res.status(503).json({ error: 'Email password reset is not configured. Contact your platform owner.' });
     }
-
     const { rows } = await pool.query(
       `SELECT id, email FROM users WHERE lower(email) = $1 AND status = 'active'`,
       [input.data.email.toLowerCase()],
     );
     if (rows.length) {
-      await pool.query(
-        `UPDATE admin_password_reset_tokens SET used_at = now()
-         WHERE user_id = $1 AND used_at IS NULL`,
-        [rows[0].id],
-      );
-      const rawToken = randomBytes(32).toString('base64url');
-      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-      await pool.query(
-        `INSERT INTO admin_password_reset_tokens (user_id, token_hash, expires_at)
-         VALUES ($1, $2, now() + interval '30 minutes')`,
-        [rows[0].id, tokenHash],
-      );
-      const port = Number(process.env.SMTP_PORT || 587);
-      const transport = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port,
-        secure: port === 465,
-        auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
-      });
-      const resetUrl = `${process.env.ADMIN_ORIGIN || 'http://localhost:5173'}/reset-password?token=${rawToken}`;
-      try {
-        await transport.sendMail({
-          from: SMTP_FROM,
-          to: rows[0].email,
-          subject: 'Reset your EdTech account password',
-          text: `Use this one-time link within 30 minutes to reset your password: ${resetUrl}\n\nIf you did not request this, ignore this email.`,
-        });
-      } catch (error) {
-        console.error('Password reset email delivery failed:', error.message);
-        await pool.query(
-          'UPDATE admin_password_reset_tokens SET used_at = now() WHERE token_hash = $1',
-          [tokenHash],
-        );
-        return res.status(503).json({ error: 'The reset email could not be sent. Please contact your platform owner.' });
-      }
-      await writeAudit(req, { actorId: rows[0].id, event: 'password_reset_requested', module: 'security' });
+      await sendPasswordResetEmail(req, { userId: rows[0].id, email: rows[0].email, actorId: rows[0].id });
     }
     return res.status(202).json({ message: 'If an active account matches that email, a password reset link will be sent.' });
   } catch (error) { return next(error); }

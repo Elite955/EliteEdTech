@@ -29,6 +29,10 @@ Run backend tests from `backend` with `npm test`.
 
 All roles use the shared sign-in page. Administrator accounts must enroll an authenticator app on first sign-in and provide a one-time code on later sign-ins. Student and teacher routes currently lead to placeholder workspaces.
 
+Super Admins can review active sessions across accounts, including sign-in time, last authenticated API activity, expiry, IP address, and browser/device details recorded at sign-in. Ended and expired sessions are not shown. An unexpired session may be idle. Viewing and revoking a session is audited; the current Super Admin session cannot be revoked from this page.
+
+All administrator roles can view and edit student and teacher accounts, suspend/reactivate or deactivate them, and email a password-reset link to active accounts. Every status change revokes existing sessions and pending password-reset links, so reactivating an account does not restore old access. Account updates and reset requests are audited. Permanent account deletion is not available; administrator account and role management remains Super Admin-only.
+
 Keep credentials and provider secrets in the backend's root `.env` file. Never add secrets to the client or commit `.env`. The Integrations screen reports test-mode readiness only; it never displays secret values.
 
 The admin summary can be downloaded as PDF or XLSX. Razorpay full refunds accept only test keys (`rzp_test_`) with `RAZORPAY_TEST_MODE=true`; Twilio sends only through the WhatsApp sandbox to numbers in `TWILIO_TEST_RECIPIENTS`; Zoom meeting creation requires `ZOOM_TEST_MODE=true` and a dedicated test account. These actions are disabled outside `development`/`test` and are never called during setup or automated tests. Do not enable test flags in production. Backup execution and user impersonation remain disabled until their policies are approved.

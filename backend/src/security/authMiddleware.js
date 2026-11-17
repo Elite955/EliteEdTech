@@ -1,6 +1,17 @@
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool.js';
 
+async function touchSession(sessionType, sessionId, lastSeenAt) {
+  if (lastSeenAt && Date.now() - new Date(lastSeenAt).getTime() < 60_000) return;
+  const table = sessionType === 'admin' ? 'admin_sessions' : 'user_sessions';
+  await pool.query(
+    `UPDATE ${table} SET last_seen_at = now()
+     WHERE id = $1 AND revoked_at IS NULL AND expires_at > now()
+       AND (last_seen_at IS NULL OR last_seen_at < now() - interval '1 minute')`,
+    [sessionId],
+  );
+}
+
 export async function requireAdmin(req, res, next) {
   const token = req.cookies.edtech_session ?? req.cookies.admin_session;
   if (!token) {
@@ -14,7 +25,8 @@ export async function requireAdmin(req, res, next) {
     }
 
     const result = await pool.query(
-      `SELECT u.id, u.name, u.email, u.status, r.code AS role_code, r.name AS role_name, s.id AS session_id
+      `SELECT u.id, u.name, u.email, u.status, r.code AS role_code, r.name AS role_name,
+              s.id AS session_id, s.last_seen_at
        FROM admin_sessions s
        JOIN users u ON u.id = s.user_id
        JOIN admin_profiles ap ON ap.user_id = u.id
@@ -29,6 +41,7 @@ export async function requireAdmin(req, res, next) {
     }
 
     req.auth = result.rows[0];
+    await touchSession('admin', req.auth.session_id, req.auth.last_seen_at);
     return next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
@@ -52,7 +65,7 @@ export async function requireAuthenticatedUser(req, res, next) {
 
     const adminSession = await pool.query(
       `SELECT u.id, u.name, u.email, u.status, u.role AS account_role,
-              r.code AS role_code, r.name AS role_name, s.id AS session_id
+              r.code AS role_code, r.name AS role_name, s.id AS session_id, s.last_seen_at
        FROM admin_sessions s
        JOIN users u ON u.id = s.user_id
        JOIN admin_profiles ap ON ap.user_id = u.id
@@ -64,12 +77,13 @@ export async function requireAuthenticatedUser(req, res, next) {
 
     if (adminSession.rowCount) {
       req.auth = { ...adminSession.rows[0], session_type: 'admin' };
+      await touchSession('admin', req.auth.session_id, req.auth.last_seen_at);
       return next();
     }
 
     const userSession = await pool.query(
       `SELECT u.id, u.name, u.email, u.status, u.role AS account_role,
-              u.role AS role_code, initcap(u.role) AS role_name, s.id AS session_id
+              u.role AS role_code, initcap(u.role) AS role_name, s.id AS session_id, s.last_seen_at
        FROM user_sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL
@@ -81,6 +95,7 @@ export async function requireAuthenticatedUser(req, res, next) {
       return res.status(401).json({ error: 'Session is invalid or expired.' });
     }
     req.auth = { ...userSession.rows[0], session_type: 'user' };
+    await touchSession('user', req.auth.session_id, req.auth.last_seen_at);
     return next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {

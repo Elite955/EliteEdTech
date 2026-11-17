@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { writeAudit } from '../security/audit.js';
 import { hasPermission, requireAdmin, requirePermission } from '../security/authMiddleware.js';
+import { sendPasswordResetEmail } from '../security/passwordReset.js';
 import { createFullRefund, getRefundStatus, isRazorpayTestConfigured } from '../integrations/razorpay.js';
 import { getWhatsAppMessageStatus, isAllowedTwilioTestRecipient, isTwilioSandboxConfigured, sendWhatsAppTestMessage } from '../integrations/twilio.js';
 import { ProviderError } from '../integrations/providerError.js';
@@ -37,6 +38,13 @@ const allowedModules = new Set([
 const providerActionLimiter = rateLimit({
   windowMs: 60_000,
   limit: 5,
+  keyGenerator: (req) => req.auth.id,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const accountActionLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 10,
   keyGenerator: (req) => req.auth.id,
   standardHeaders: true,
   legacyHeaders: false,
@@ -112,6 +120,8 @@ async function createPerson(req, res, role) {
 }
 
 async function updatePerson(req, res, role) {
+  const id = z.string().uuid().safeParse(req.params.id);
+  if (!id.success) return validationError(res, id.error);
   const input = z.object({
     name: z.string().trim().min(1).max(120).optional(),
     email: z.string().email().max(254).optional(),
@@ -128,7 +138,7 @@ async function updatePerson(req, res, role) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query('SELECT id FROM users WHERE id = $1 AND role = $2 FOR UPDATE', [req.params.id, role]);
+    const current = await client.query('SELECT id FROM users WHERE id = $1 AND role = $2 FOR UPDATE', [id.data, role]);
     if (!current.rowCount) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Account not found.' });
@@ -139,24 +149,37 @@ async function updatePerson(req, res, role) {
         phone = CASE WHEN $4::boolean THEN $5 ELSE phone END,
         status = COALESCE($6, status), updated_at = now()
        WHERE id = $1`,
-      [req.params.id, data.name ?? null, data.email ?? null, Object.hasOwn(data, 'phone'), data.phone ?? null, data.status ?? null],
+      [id.data, data.name ?? null, data.email ?? null, Object.hasOwn(data, 'phone'), data.phone ?? null, data.status ?? null],
     );
     if (role === 'student' && (Object.hasOwn(data, 'age') || Object.hasOwn(data, 'grade'))) {
       await client.query(
-        `INSERT INTO student_profiles (user_id, age, grade) VALUES ($1, $2, $3)
-         ON CONFLICT (user_id) DO UPDATE SET age = COALESCE($2, student_profiles.age), grade = COALESCE($3, student_profiles.grade)`,
-        [req.params.id, data.age ?? null, data.grade ?? null],
+        `INSERT INTO student_profiles (user_id, age, grade) VALUES ($1, $3, $5)
+         ON CONFLICT (user_id) DO UPDATE SET
+           age = CASE WHEN $2::boolean THEN $3 ELSE student_profiles.age END,
+           grade = CASE WHEN $4::boolean THEN $5 ELSE student_profiles.grade END`,
+        [id.data, Object.hasOwn(data, 'age'), data.age ?? null, Object.hasOwn(data, 'grade'), data.grade ?? null],
       );
     }
     if (role === 'teacher' && (Object.hasOwn(data, 'subjects') || Object.hasOwn(data, 'hourlyRate'))) {
       await client.query(
         `INSERT INTO teacher_profiles (user_id, subjects, hourly_rate) VALUES ($1, $2, $3)
-         ON CONFLICT (user_id) DO UPDATE SET subjects = COALESCE($2, teacher_profiles.subjects), hourly_rate = COALESCE($3, teacher_profiles.hourly_rate)`,
-        [req.params.id, data.subjects ?? null, data.hourlyRate ?? null],
+         ON CONFLICT (user_id) DO UPDATE SET
+           subjects = CASE WHEN $4::boolean THEN $2::text[] ELSE teacher_profiles.subjects END,
+           hourly_rate = CASE WHEN $5::boolean THEN $3::numeric ELSE teacher_profiles.hourly_rate END`,
+        [id.data, data.subjects ?? [], data.hourlyRate ?? null, Object.hasOwn(data, 'subjects'), Object.hasOwn(data, 'hourlyRate')],
       );
     }
+    if (Object.hasOwn(data, 'status') || Object.hasOwn(data, 'email')) {
+      await client.query(
+        'UPDATE admin_password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL',
+        [id.data],
+      );
+    }
+    if (Object.hasOwn(data, 'status')) {
+      await client.query('UPDATE user_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [id.data]);
+    }
     await client.query('COMMIT');
-    await writeAudit(req, { event: `${role}_updated`, module: `${role}s`, targetId: req.params.id, details: { fields: Object.keys(data) } });
+    await writeAudit(req, { event: `${role}_updated`, module: `${role}s`, targetId: id.data, details: { fields: Object.keys(data) } });
     return res.json({ message: 'Account updated.' });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -645,6 +668,22 @@ for (const role of ['student', 'teacher']) {
   adminRouter.post(path, requireAdmin, requirePermission(`${role}s`, 'create'), async (req, res, next) => {
     try { return await createPerson(req, res, role); } catch (error) { return next(error); }
   });
+  adminRouter.post(`${path}/:id/password-reset`, requireAdmin, requirePermission(`${role}s`, 'edit'), accountActionLimiter, async (req, res, next) => {
+    try {
+      const id = z.string().uuid().safeParse(req.params.id);
+      if (!id.success) return validationError(res, id.error);
+      const { rows } = await pool.query(
+        `SELECT id, email, status FROM users WHERE id = $1 AND role = $2`,
+        [id.data, role],
+      );
+      if (!rows.length) {
+        return res.status(404).json({ error: 'Account not found.' });
+      }
+      if (rows[0].status !== 'active') return res.status(409).json({ error: 'Only active accounts can receive a password reset link.' });
+      await sendPasswordResetEmail(req, { userId: rows[0].id, email: rows[0].email, actorId: req.auth.id });
+      return res.json({ message: `Password reset link sent to ${rows[0].email}.` });
+    } catch (error) { return next(error); }
+  });
   adminRouter.patch(`${path}/bulk`, requireAdmin, requirePermission(`${role}s`, 'edit'), async (req, res, next) => {
     try {
       const input = z.object({
@@ -655,11 +694,30 @@ for (const role of ['student', 'teacher']) {
       if (new Set(input.data.ids).size !== input.data.ids.length) {
         return res.status(400).json({ error: 'Duplicate account IDs are not allowed.' });
       }
-      const { rows } = await pool.query(
-        `UPDATE users SET status = $1, updated_at = now()
-         WHERE id = ANY($2::uuid[]) AND role = $3 RETURNING id`,
-        [input.data.status, input.data.ids, role],
-      );
+      const client = await pool.connect();
+      let rows;
+      try {
+        await client.query('BEGIN');
+        ({ rows } = await client.query(
+          `UPDATE users SET status = $1, updated_at = now()
+           WHERE id = ANY($2::uuid[]) AND role = $3 RETURNING id`,
+          [input.data.status, input.data.ids, role],
+        ));
+        await client.query(
+          'UPDATE user_sessions SET revoked_at = now() WHERE user_id = ANY($1::uuid[]) AND revoked_at IS NULL',
+          [rows.map((row) => row.id)],
+        );
+        await client.query(
+          'UPDATE admin_password_reset_tokens SET used_at = now() WHERE user_id = ANY($1::uuid[]) AND used_at IS NULL',
+          [rows.map((row) => row.id)],
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
       await writeAudit(req, {
         event: `${role}_bulk_status_updated`,
         module: `${role}s`,
@@ -770,16 +828,115 @@ adminRouter.patch('/admins/:id', requireAdmin, requirePermission('admins', 'edit
   } catch (error) { return next(error); }
 });
 
+adminRouter.get('/security/sessions/active', requireAdmin, requirePermission('security', 'view'), async (req, res, next) => {
+  try {
+    if (req.auth.role_code !== 'super_admin') return res.status(403).json({ error: 'Only a Super Admin can view active session details.' });
+    const { rows } = await pool.query(
+      `SELECT active_sessions.*,
+              (active_sessions.id = $1) AS is_current
+       FROM (
+         SELECT s.id::text AS id, u.name, u.email, u.role AS account_type,
+                r.name AS role_name, s.created_at, COALESCE(s.last_seen_at, s.created_at) AS last_seen_at, s.expires_at,
+                s.ip_address::text AS ip_address, s.user_agent
+         FROM admin_sessions s
+         JOIN users u ON u.id = s.user_id
+         JOIN admin_profiles ap ON ap.user_id = u.id
+         JOIN admin_roles r ON r.id = ap.role_id
+         WHERE s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'active' AND u.role = 'admin'
+         UNION ALL
+         SELECT s.id::text AS id, u.name, u.email, u.role AS account_type,
+                initcap(u.role) AS role_name, s.created_at, COALESCE(s.last_seen_at, s.created_at) AS last_seen_at, s.expires_at,
+                s.ip_address::text AS ip_address, s.user_agent
+         FROM user_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'active'
+           AND u.role IN ('student', 'teacher')
+       ) active_sessions
+       ORDER BY active_sessions.created_at DESC`,
+      [req.auth.session_id],
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    await writeAudit(req, { event: 'active_sessions_viewed', module: 'security', details: { sessionCount: rows.length } });
+    return res.json({ items: rows });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post('/security/sessions/:id/revoke', requireAdmin, requirePermission('security', 'manage'), async (req, res, next) => {
+  const sessionId = z.string().uuid().safeParse(req.params.id);
+  if (!sessionId.success) return validationError(res, sessionId.error);
+  if (req.auth.role_code !== 'super_admin') return res.status(403).json({ error: 'Only a Super Admin can revoke active sessions.' });
+  if (sessionId.data.toLowerCase() === String(req.auth.session_id).toLowerCase()) {
+    return res.status(409).json({ error: 'You cannot revoke the session you are currently using.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let sessionType;
+    let userId;
+    const adminSession = await client.query(
+      `SELECT s.user_id FROM admin_sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
+         AND u.status = 'active' AND u.role = 'admin'
+       FOR UPDATE OF s`,
+      [sessionId.data],
+    );
+    if (adminSession.rowCount) {
+      sessionType = 'admin';
+      userId = adminSession.rows[0].user_id;
+    } else {
+      const userSession = await client.query(
+        `SELECT s.user_id FROM user_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
+           AND u.status = 'active' AND u.role IN ('student', 'teacher')
+         FOR UPDATE OF s`,
+        [sessionId.data],
+      );
+      if (!userSession.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'The session is no longer active.' });
+      }
+      sessionType = 'user';
+      userId = userSession.rows[0].user_id;
+    }
+
+    const table = sessionType === 'admin' ? 'admin_sessions' : 'user_sessions';
+    const revoked = await client.query(
+      `UPDATE ${table} SET revoked_at = now()
+       WHERE id = $1 AND revoked_at IS NULL AND expires_at > now()
+       RETURNING id`,
+      [sessionId.data],
+    );
+    if (!revoked.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'The session is no longer active.' });
+    }
+    await client.query('COMMIT');
+    await writeAudit(req, { event: 'active_session_revoked', module: 'security', targetId: userId, details: { sessionType } });
+    return res.json({ message: 'The active session was revoked.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally { client.release(); }
+});
+
 adminRouter.get('/admins/:id/sessions', requireAdmin, requirePermission('admins', 'view'), async (req, res, next) => {
   try {
     if (req.auth.role_code !== 'super_admin') return res.status(403).json({ error: 'Only a Super Admin can manage administrator sessions.' });
     const account = await pool.query(`SELECT 1 FROM users WHERE id = $1 AND role = 'admin'`, [req.params.id]);
     if (!account.rowCount) return res.status(404).json({ error: 'Administrator not found.' });
     const { rows } = await pool.query(
-      `SELECT id, created_at, expires_at, revoked_at, ip_address, user_agent
-       FROM admin_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+      `SELECT id, created_at, COALESCE(last_seen_at, created_at) AS last_seen_at,
+              expires_at, revoked_at, ip_address, user_agent
+       FROM admin_sessions
+       WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+       ORDER BY created_at DESC LIMIT 50`,
       [req.params.id],
     );
+    res.setHeader('Cache-Control', 'private, no-store');
+    await writeAudit(req, { event: 'admin_sessions_viewed', module: 'security', targetId: req.params.id, details: { sessionCount: rows.length } });
     return res.json({ items: rows });
   } catch (error) { return next(error); }
 });
@@ -829,6 +986,13 @@ adminRouter.post('/roles', requireAdmin, requirePermission('roles', 'manage'), a
       `INSERT INTO admin_roles (code, name, description) VALUES ($1, $2, $3) RETURNING id, code, name, description, is_system`,
       [input.data.code, input.data.name, input.data.description],
     );
+    await pool.query(
+      `INSERT INTO role_permissions (role_id, permission_id)
+       SELECT $1, id FROM permissions
+       WHERE module IN ('students', 'teachers') AND action IN ('view', 'edit')
+       ON CONFLICT DO NOTHING`,
+      [rows[0].id],
+    );
     await writeAudit(req, { event: 'role_created', module: 'roles', targetId: rows[0].id });
     return res.status(201).json({ item: rows[0] });
   } catch (error) {
@@ -852,6 +1016,17 @@ adminRouter.put('/roles/:id/permissions', requireAdmin, requirePermission('roles
       if (role.rows[0].code === 'super_admin') {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'The Super Admin role must retain its full access.' });
+      }
+      const requiredAccountPermissions = [
+        { module: 'students', action: 'view' },
+        { module: 'students', action: 'edit' },
+        { module: 'teachers', action: 'view' },
+        { module: 'teachers', action: 'edit' },
+      ];
+      if (requiredAccountPermissions.some((required) =>
+        !input.data.permissions.some((permission) => permission.module === required.module && permission.action === required.action))) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Every admin role must retain student and teacher view/edit permissions.' });
       }
       const permissionIds = [];
       for (const permission of input.data.permissions) {

@@ -26,6 +26,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
   const [notice, setNotice] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkStatus, setBulkStatus] = useState<'active' | 'suspended' | 'deactivated'>('suspended')
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', hourlyRate: '' })
@@ -83,6 +84,43 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
     }
   }
 
+  function openCreateDialog() {
+    setEditingPerson(null)
+    setForm({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', hourlyRate: '' })
+    setError('')
+    setNotice('')
+    setDialogOpen(true)
+  }
+
+  function openEditDialog(item: Person) {
+    setEditingPerson(item)
+    setForm({
+      name: item.name,
+      email: item.email,
+      password: '',
+      phone: item.phone ?? '',
+      age: item.age == null ? '' : String(item.age),
+      grade: item.grade ?? '',
+      subjects: item.subjects?.join(', ') ?? '',
+      hourlyRate: item.hourly_rate == null ? '' : String(item.hourly_rate),
+    })
+    setError('')
+    setNotice('')
+    setDialogOpen(true)
+  }
+
+  async function sendPasswordReset(item: Person) {
+    if (item.status !== 'active' || !window.confirm(`Send a password reset link to ${item.email}?`)) return
+    setError('')
+    setNotice('')
+    try {
+      const result = await api<{ message: string }>(`/admin/${role}s/${item.id}/password-reset`, { method: 'POST' })
+      setNotice(result.message)
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    }
+  }
+
   async function exportAccounts() {
     setError('')
     try {
@@ -126,22 +164,28 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
     setError('')
     setNotice('')
     try {
-      const payload = {
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        phone: form.phone || null,
-        ...(role === 'student' ? {
-          age: form.age ? Number(form.age) : null,
-          grade: form.grade || null,
-        } : {
-          subjects: form.subjects.split(',').map((subject) => subject.trim()).filter(Boolean),
-          hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : null,
-        }),
+      const profile = role === 'student' ? {
+        age: form.age ? Number(form.age) : null,
+        grade: form.grade || null,
+      } : {
+        subjects: form.subjects.split(',').map((subject) => subject.trim()).filter(Boolean),
+        hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : null,
       }
-      await api(`/admin/${role}s`, { method: 'POST', body: JSON.stringify(payload) })
-      setNotice(`${role === 'student' ? 'Student' : 'Teacher'} account created.`)
+      if (editingPerson) {
+        await api(`/admin/${role}s/${editingPerson.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone || null, ...profile }),
+        })
+        setNotice(`${role === 'student' ? 'Student' : 'Teacher'} account updated.`)
+      } else {
+        await api(`/admin/${role}s`, {
+          method: 'POST',
+          body: JSON.stringify({ name: form.name, email: form.email, password: form.password, phone: form.phone || null, ...profile }),
+        })
+        setNotice(`${role === 'student' ? 'Student' : 'Teacher'} account created.`)
+      }
       setDialogOpen(false)
+      setEditingPerson(null)
       setForm({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', hourlyRate: '' })
       await load()
     } catch (requestError) {
@@ -158,7 +202,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
         <div><p className="eyebrow">USER MANAGEMENT</p><h2>{heading}</h2><p>Search, review, and manage {role} accounts across the platform.</p></div>
         <div className="intro-actions">
           {canExport && <button className="secondary-button" onClick={() => void exportAccounts()}><Download size={15} /> Export CSV</button>}
-          {canCreate && <button className="primary-button" onClick={() => setDialogOpen(true)}><Plus size={17} /> Add {role}</button>}
+          {canCreate && <button className="primary-button" onClick={openCreateDialog}><Plus size={17} /> Add {role}</button>}
         </div>
       </div>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
@@ -189,7 +233,11 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
                   <td>{role === 'student' ? <>{item.grade || '—'}{item.age ? <small className="table-secondary">{item.age} years old</small> : null}</> : <>{item.subjects?.length ? item.subjects.join(', ') : 'Not set'}{item.hourly_rate != null ? <small className="table-secondary">₹{Number(item.hourly_rate).toLocaleString('en-IN')} / hour</small> : null}</>}</td>
                   <td><span className={`status-pill status-${item.status}`}>{item.status.replaceAll('_', ' ')}</span></td>
                   <td>{new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(item.created_at))}</td>
-                  {canEdit && <td className="align-right"><button className={`table-action ${item.status === 'active' ? 'danger-action' : ''}`} onClick={() => void toggleStatus(item)}>{item.status === 'active' ? 'Suspend' : 'Activate'}</button></td>}
+                  {canEdit && <td className="align-right"><div className="row-actions">
+                    <button className="table-action" onClick={() => openEditDialog(item)}>Edit</button>
+                    <button className={`table-action ${item.status === 'active' ? 'danger-action' : ''}`} onClick={() => void toggleStatus(item)}>{item.status === 'active' ? 'Suspend' : 'Activate'}</button>
+                    <button className="table-action" disabled={item.status !== 'active'} title={item.status === 'active' ? `Send reset link to ${item.email}` : 'Only active accounts can receive a reset link.'} onClick={() => void sendPasswordReset(item)}>Reset password</button>
+                  </div></td>}
                 </tr>
               ))}
               {!loading && items.length === 0 && <tr><td colSpan={canEdit ? 7 : 5}><div className="table-empty"><UserRound size={26} /><strong>No {role} accounts found</strong><span>Adjust your search or add a new account.</span></div></td></tr>}
@@ -201,11 +249,11 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
       {dialogOpen && (
         <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialogOpen(false) }}>
           <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
-            <div className="dialog-heading"><div><p className="eyebrow">USER MANAGEMENT</p><h3 id="create-user-title">Add {role}</h3></div><button className="icon-button" aria-label="Close dialog" onClick={() => setDialogOpen(false)}><X size={19} /></button></div>
+            <div className="dialog-heading"><div><p className="eyebrow">USER MANAGEMENT</p><h3 id="create-user-title">{editingPerson ? `Edit ${role}` : `Add ${role}`}</h3></div><button className="icon-button" aria-label="Close dialog" onClick={() => { setDialogOpen(false); setEditingPerson(null) }}><X size={19} /></button></div>
             <form className="dialog-form" onSubmit={submit}>
               <label>Full name<input required maxLength={120} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
               <label>Email address<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-              <label>Initial password<input required type="password" minLength={12} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /><small>Use at least 12 characters; share securely with the account holder.</small></label>
+              {!editingPerson && <label>Initial password<input required type="password" minLength={12} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /><small>Use at least 12 characters; share securely with the account holder.</small></label>}
               <label>Phone number<input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
               {role === 'student' ? <>
                 <label>Age<input type="number" min="1" max="120" value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} /></label>
@@ -215,7 +263,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
                 <label>Hourly rate (INR)<input type="number" min="0" step="0.01" value={form.hourlyRate} onChange={(event) => setForm({ ...form, hourlyRate: event.target.value })} /></label>
               </>}
               {error && <div role="alert" className="form-error">{error}</div>}
-              <div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => setDialogOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'Creating…' : `Create ${role}`}</button></div>
+              <div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => { setDialogOpen(false); setEditingPerson(null) }}>Cancel</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving…' : editingPerson ? 'Save changes' : `Create ${role}`}</button></div>
             </form>
           </section>
         </div>

@@ -1,3 +1,4 @@
+export { ActiveSessionsPage } from './ActiveSessionsPage'
 export { LoginPage } from './LoginPage'
 export { Dashboard } from './Dashboard'
 export { UserDirectory } from './UserDirectory'

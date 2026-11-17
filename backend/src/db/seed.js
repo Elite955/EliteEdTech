@@ -76,6 +76,15 @@ async function seed() {
       }
     }
 
+    await client.query(
+      `INSERT INTO role_permissions (role_id, permission_id)
+       SELECT role.id, permission.id
+       FROM admin_roles role
+       JOIN permissions permission ON permission.module IN ('students', 'teachers')
+         AND permission.action IN ('view', 'edit')
+       ON CONFLICT DO NOTHING`,
+    );
+
     const passwordHash = await bcrypt.hash(BOOTSTRAP_ADMIN_PASSWORD, 12);
     const { rows: userRows } = await client.query(
       `INSERT INTO users (role, name, email, password_hash)

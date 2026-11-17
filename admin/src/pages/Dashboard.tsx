@@ -23,10 +23,19 @@ type Overview = {
 }
 
 const cardDefinitions = [
-  { key: 'totalStudents', label: 'Total students', icon: GraduationCap, tone: 'violet', currency: false },
-  { key: 'totalTeachers', label: 'Total teachers', icon: Users, tone: 'blue', currency: false },
-  { key: 'bookings', label: 'Total bookings', icon: BookOpenCheck, tone: 'green', currency: false },
-  { key: 'revenue', label: 'Successful revenue', icon: CircleDollarSign, tone: 'amber', currency: true },
+  { key: 'totalStudents', label: 'Students', scope: 'All registered', icon: GraduationCap, tone: 'violet', currency: false },
+  { key: 'totalTeachers', label: 'Teachers', scope: 'All registered', icon: Users, tone: 'blue', currency: false },
+  { key: 'bookings', label: 'Bookings', scope: 'All statuses', icon: BookOpenCheck, tone: 'green', currency: false },
+  { key: 'revenue', label: 'Revenue', scope: 'Successful payments', icon: CircleDollarSign, tone: 'amber', currency: true },
+] as const
+
+const operationalMetrics = [
+  { key: 'administrators', label: 'Admin accounts', icon: Users, tone: 'violet' },
+  { key: 'pendingBookings', label: 'Pending bookings', icon: Activity, tone: 'amber' },
+  { key: 'completedClasses', label: 'Completed classes', icon: BookOpenCheck, tone: 'green' },
+  { key: 'ongoingClasses', label: 'Ongoing classes', icon: Activity, tone: 'blue' },
+  { key: 'pendingPayments', label: 'Pending payments', icon: CircleDollarSign, tone: 'blue' },
+  { key: 'cancelledClasses', label: 'Cancelled classes', icon: ArrowDownRight, tone: 'rose' },
 ] as const
 
 const numberFormatter = new Intl.NumberFormat('en-IN')
@@ -53,34 +62,43 @@ export function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      <div className="page-intro">
-        <div><p className="eyebrow">PLATFORM OVERVIEW</p><h2>Good day. Here’s your platform at a glance.</h2><p>Monitor activity, service operations, and recent administrative actions.</p></div>
-        <span className="date-chip">{todayLabel}</span>
+      <div className="page-intro dashboard-intro">
+        <div>
+          <p className="eyebrow">OVERVIEW</p>
+          <h2>Platform overview</h2>
+          <p>Key figures and recent activity across the platform.</p>
+        </div>
+        <div className="dashboard-date"><span>Reporting date</span><strong>{todayLabel}</strong></div>
       </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       <div className="stat-grid">
-        {cardDefinitions.map(({ key, label, icon: Icon, tone, currency }) => (
+        {cardDefinitions.map(({ key, label, scope, icon: Icon, tone, currency }) => (
           <article className="stat-card" key={key}>
-            <div className={`stat-icon ${tone}`}><Icon size={19} /></div>
+            <div className="stat-card-top">
+              <span className={`stat-icon ${tone}`}><Icon size={19} strokeWidth={1.8} /></span>
+              <span className="stat-scope">{scope}</span>
+            </div>
             <p>{label}</p>
             <strong>{busy ? '—' : currency ? currencyFormatter.format(Number(stats?.[key] ?? 0)) : numberFormatter.format(Number(stats?.[key] ?? 0))}</strong>
-            <span className="stat-foot"><span className="stat-period"><Activity size={13} /> All time</span></span>
           </article>
         ))}
       </div>
-      <div className="dashboard-secondary">
-        <div className="mini-stat"><span className="mini-stat-icon violet"><Users size={17} /></span><div><span>Administrators</span><strong>{busy ? '—' : numberFormatter.format(stats?.administrators ?? 0)}</strong></div></div>
-        <div className="mini-stat"><span className="mini-stat-icon violet"><GraduationCap size={17} /></span><div><span>Active students</span><strong>{busy ? '—' : numberFormatter.format(stats?.students ?? 0)}</strong></div></div>
-        <div className="mini-stat"><span className="mini-stat-icon blue"><Users size={17} /></span><div><span>Active teachers</span><strong>{busy ? '—' : numberFormatter.format(stats?.teachers ?? 0)}</strong></div></div>
-        <div className="mini-stat"><span className="mini-stat-icon amber"><Activity size={17} /></span><div><span>Pending bookings</span><strong>{busy ? '—' : numberFormatter.format(stats?.pendingBookings ?? 0)}</strong></div></div>
-        <div className="mini-stat"><span className="mini-stat-icon green"><BookOpenCheck size={17} /></span><div><span>Completed classes</span><strong>{busy ? '—' : numberFormatter.format(stats?.completedClasses ?? 0)}</strong></div></div>
-        <div className="mini-stat"><span className="mini-stat-icon green"><BookOpenCheck size={17} /></span><div><span>Ongoing classes</span><strong>{busy ? '—' : numberFormatter.format(stats?.ongoingClasses ?? 0)}</strong></div></div>
-        <div className="mini-stat"><span className="mini-stat-icon blue"><CircleDollarSign size={17} /></span><div><span>Payments pending</span><strong>{busy ? '—' : numberFormatter.format(stats?.pendingPayments ?? 0)}</strong></div></div>
-        <div className="mini-stat"><span className="mini-stat-icon rose"><ArrowDownRight size={17} /></span><div><span>Classes cancelled</span><strong>{busy ? '—' : numberFormatter.format(stats?.cancelledClasses ?? 0)}</strong></div></div>
-      </div>
+      <section className="operational-section" aria-labelledby="operational-heading">
+        <div className="section-heading">
+          <div><h3 id="operational-heading">Operational snapshot</h3><p>Current workload and service activity</p></div>
+        </div>
+        <div className="dashboard-secondary">
+          {operationalMetrics.map(({ key, label, icon: Icon, tone }) => (
+            <div className="mini-stat" key={key}>
+              <span className={`mini-stat-icon ${tone}`}><Icon size={17} strokeWidth={1.8} /></span>
+              <div><span>{label}</span><strong>{busy ? '—' : numberFormatter.format(stats?.[key] ?? 0)}</strong></div>
+            </div>
+          ))}
+        </div>
+      </section>
       <section className="dashboard-grid">
         <article className="panel trend-panel">
-          <div className="panel-heading"><div><h3>Platform activity</h3><p>Monthly bookings and completed registrations</p></div><span className="panel-period">Last 6 months</span></div>
+          <div className="panel-heading"><div><h3>Monthly activity</h3><p>Bookings and new student registrations</p></div><span className="panel-period">Last 6 months</span></div>
           {trend.length ? (
             <div className="activity-chart" role="img" aria-label="Monthly bookings and student registrations">
               {trend.map((item) => (
@@ -97,7 +115,7 @@ export function Dashboard() {
           <div className="chart-legend"><span><i className="legend-blue" />Bookings</span><span><i className="legend-green" />Students</span></div>
         </article>
         <article className="panel activity-panel">
-          <div className="panel-heading"><div><h3>Recent admin activity</h3><p>Latest logged administrative actions</p></div><Link to="/modules/activity_logs" className="panel-link">View logs</Link></div>
+          <div className="panel-heading"><div><h3>Recent admin activity</h3><p>Latest recorded administrative actions</p></div><Link to="/modules/activity_logs" className="panel-link">View log</Link></div>
           <div className="activity-list">
             {overview?.recentActivity.map((item) => (
               <div className="activity-row" key={item.id}>

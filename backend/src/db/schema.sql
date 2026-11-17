@@ -49,6 +49,17 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 );
 
 INSERT INTO permissions (module, action)
+VALUES ('students', 'view'), ('students', 'edit'), ('teachers', 'view'), ('teachers', 'edit')
+ON CONFLICT (module, action) DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT role.id, permission.id
+FROM admin_roles role
+JOIN permissions permission ON permission.module IN ('students', 'teachers')
+  AND permission.action IN ('view', 'edit')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO permissions (module, action)
 VALUES ('live_classes', 'manage')
 ON CONFLICT (module, action) DO NOTHING;
 
@@ -74,6 +85,7 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL,
   revoked_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ,
   ip_address INET,
   user_agent TEXT
 );
@@ -84,9 +96,13 @@ CREATE TABLE IF NOT EXISTS user_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL,
   revoked_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ,
   ip_address INET,
   user_agent TEXT
 );
+
+ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS admin_password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
