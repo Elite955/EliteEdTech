@@ -49,6 +49,17 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 );
 
 INSERT INTO permissions (module, action)
+VALUES ('students', 'view'), ('students', 'edit'), ('teachers', 'view'), ('teachers', 'edit')
+ON CONFLICT (module, action) DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT role.id, permission.id
+FROM admin_roles role
+JOIN permissions permission ON permission.module IN ('students', 'teachers')
+  AND permission.action IN ('view', 'edit')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO permissions (module, action)
 VALUES ('live_classes', 'manage')
 ON CONFLICT (module, action) DO NOTHING;
 

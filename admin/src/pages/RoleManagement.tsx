@@ -24,6 +24,9 @@ const moduleLabels: Record<string, string> = {
   backups: 'Backups', maintenance: 'Maintenance mode',
 }
 const actions = ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'manage']
+const requiredAccountPermissions = new Set([
+  'students:view', 'students:edit', 'teachers:view', 'teachers:edit',
+])
 
 export function RoleManagement() {
   const { can } = useAuth()
@@ -153,10 +156,12 @@ export function RoleManagement() {
                   <td>{moduleLabels[module] ?? module}</td>
                   {actions.map((action) => {
                     const checked = draft.some((permission) => permission.module === module && permission.action === action)
-                    return <td key={action}><button type="button" className={`permission-check${checked ? ' checked' : ''}`} disabled={!mayManage || selected.code === 'super_admin'} aria-label={`${checked ? 'Revoke' : 'Grant'} ${action} ${module}`} onClick={() => togglePermission(module, action)}>{checked && <Check size={14} />}</button></td>
+                    const required = requiredAccountPermissions.has(`${module}:${action}`)
+                    return <td key={action}><button type="button" className={`permission-check${checked ? ' checked' : ''}`} disabled={!mayManage || selected.code === 'super_admin' || required} aria-label={`${checked ? 'Revoke' : 'Grant'} ${action} ${module}`} title={required ? 'Required for every admin role' : undefined} onClick={() => togglePermission(module, action)}>{checked && <Check size={14} />}</button></td>
                   })}
                 </tr>)}</tbody>
               </table></div>
+              <p className="permission-note">Every admin role must retain view and edit access for student and teacher accounts. Other permissions remain role-based.</p>
             </> : <div className="table-empty">Select a role to review its permissions.</div>}
           </section>
         </div>

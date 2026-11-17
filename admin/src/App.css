@@ -210,6 +210,7 @@ tbody tr:hover { background: #fcfcfe; }
 .align-right { text-align: right; }
 .table-action { padding: 6px 9px; color: #2e6c61; background: #edf4f0; border: 1px solid #dfebe4; border-radius: 5px; font-size: 10px; font-weight: 600; }
 .table-action:hover { background: #e4efe9; }
+.table-action:disabled { opacity: .5; cursor: not-allowed; }
 .table-action.danger-action { color: #b44b53; background: #fff5f5; border-color: #f7e3e3; }
 .table-action.danger-action:hover { background: #ffeded; }
 .table-empty { min-height: 158px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: #99a1b0; font-size: 10px; text-align: center; }
@@ -246,6 +247,7 @@ tbody tr:hover { background: #fcfcfe; }
 .permission-check { width: 20px; height: 20px; display: inline-grid; place-items: center; padding: 0; color: transparent; background: #fff; border: 1px solid #dfe3ec; border-radius: 5px; vertical-align: middle; }
 .permission-check.checked { color: #fff; background: #397b6d; border-color: #397b6d; }
 .permission-check:disabled { opacity: .85; cursor: not-allowed; }
+.permission-note { padding: 0 16px; color: #788296; font-size: 9px; line-height: 1.5; }
 
 .dialog-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: rgba(16, 25, 50, .47); backdrop-filter: blur(2px); }
 .dialog { width: min(490px, 100%); max-height: min(90vh, 760px); overflow: auto; padding: 22px; background: #fff; border: 1px solid rgba(255,255,255,.7); border-radius: 13px; box-shadow: 0 24px 80px rgba(12,21,48,.25); }
