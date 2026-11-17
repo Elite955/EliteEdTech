@@ -109,10 +109,10 @@ export function LoginPage() {
         <div className="brand-logo"><span>e</span></div>
         <div className="brand-copy">
           <span className="eyebrow">EDTECH PLATFORM</span>
-          <h1>Learning, managed<br />with purpose.</h1>
-          <p>One secure workspace for the people and systems behind every great class.</p>
+          <h1>Manage the work behind every class.</h1>
+          <p>Review users, roles, bookings, and platform activity from one secure workspace.</p>
         </div>
-        <div className="brand-footer"><ShieldCheck size={17} /> One secure sign-in for every account</div>
+        <div className="brand-footer"><ShieldCheck size={17} /> One account for the whole platform</div>
       </section>
       <section className="login-panel">
         <div className="login-card">
@@ -120,7 +120,7 @@ export function LoginPage() {
           <span className="eyebrow">ACCOUNT SIGN-IN</span>
           <h2>{stage === 'credentials' ? 'Welcome back' : stage === 'enroll' ? 'Set up your authenticator' : 'Verify it’s you'}</h2>
           <p className="login-intro">
-            {stage === 'credentials' ? 'Sign in to continue to your learning workspace.' : stage === 'enroll' ? 'Secure your administrator account with an authenticator app.' : 'Enter the six-digit code from your authenticator app.'}
+            {stage === 'credentials' ? 'Sign in with your account to continue.' : stage === 'enroll' ? 'Secure your administrator account with an authenticator app.' : 'Enter the six-digit code from your authenticator app.'}
           </p>
 
           {stage === 'enroll' && (
