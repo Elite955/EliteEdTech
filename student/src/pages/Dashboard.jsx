@@ -1,16 +1,40 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+import { startRazorpayCheckout } from '../lib/razorpay'
+import { playUiSound } from '../lib/sound'
 import StatusBadge from '../components/StatusBadge'
 
 export default function Dashboard() {
+  const { user } = useAuth()
   const [bookings, setBookings] = useState(null)
   const [sessions, setSessions] = useState(null)
+  const [payingId, setPayingId] = useState(null)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
+  const load = () => {
     api.get('/bookings/mine').then((res) => setBookings(res.bookings || [])).catch(() => setBookings([]))
     api.get('/sessions/mine').then((res) => setSessions(res.sessions || [])).catch(() => setSessions([]))
+  }
+
+  useEffect(() => {
+    load()
   }, [])
+
+  async function payNow(booking) {
+    setPayingId(booking.id)
+    setError('')
+    try {
+      const result = await startRazorpayCheckout(booking, user, { onSuccess: load })
+      if (result instanceof Error) setError(`Payment verification failed: ${result.message}`)
+    } catch (e) {
+      setError(e.message)
+      playUiSound('error')
+    } finally {
+      setPayingId(null)
+    }
+  }
 
   const all = bookings || []
   const pending = all.filter((b) => b.status === 'pending').length
@@ -25,6 +49,7 @@ export default function Dashboard() {
     <div>
       <h1>Dashboard</h1>
       <p className="page-sub">Welcome back — here is where your learning stands.</p>
+      {error && <div className="alert error">{error}</div>}
 
       <div className="cards">
         <div className="card stat">
@@ -35,7 +60,18 @@ export default function Dashboard() {
         <div className="card stat">
           <div className="num">{awaiting}</div>
           <div className="lbl">Approved, awaiting payment</div>
-          <Link to="/bookings">Pay now →</Link>
+          {awaiting > 0 ? (
+            <button
+              type="button"
+              className="link-button"
+              disabled={payingId !== null}
+              onClick={() => payNow(all.find((booking) => booking.status === 'approved'))}
+            >
+              {payingId ? 'Opening checkout…' : 'Pay now →'}
+            </button>
+          ) : (
+            <Link to="/bookings">View bookings →</Link>
+          )}
         </div>
         <div className="card stat">
           <div className="num">{sessions?.length ?? '…'}</div>
@@ -65,9 +101,14 @@ export default function Dashboard() {
                   </div>
                   <div>
                     {b.status === 'approved' && (
-                      <Link className="btn small" to="/bookings">
-                        Pay now
-                      </Link>
+                      <button
+                        className="btn small"
+                        type="button"
+                        disabled={payingId === b.id}
+                        onClick={() => payNow(b)}
+                      >
+                        {payingId === b.id ? 'Opening checkout…' : 'Pay now'}
+                      </button>
                     )}
                     {session?.meeting_url && (
                       <a className="btn small ghost" href={session.meeting_url} target="_blank" rel="noreferrer" style={{ marginLeft: 8 }}>

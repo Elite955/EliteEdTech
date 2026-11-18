@@ -3,19 +3,9 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { playUiSound } from '../lib/sound'
+import { startRazorpayCheckout } from '../lib/razorpay'
 import StatusBadge from '../components/StatusBadge'
 import CompletionEffect from '../components/CompletionEffect'
-
-function loadRazorpay() {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true)
-    const script = document.createElement('script')
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-    script.onload = () => resolve(true)
-    script.onerror = () => resolve(false)
-    document.body.appendChild(script)
-  })
-}
 
 export default function MyBookings() {
   const { user } = useAuth()
@@ -48,37 +38,13 @@ export default function MyBookings() {
     setErr('')
     setNote('')
     try {
-      const ok = await loadRazorpay()
-      if (!ok) throw new Error('Could not load the Razorpay checkout. Check your internet connection and try again.')
-      const order = await api.post('/payments/order', { booking_id: booking.id })
-      const rzp = new window.Razorpay({
-        key: order.key_id,
-        amount: order.amount,
-        currency: order.currency || 'INR',
-        name: 'EDTECH Platform',
-        description: `One-to-one class · Booking #${booking.id}`,
-        order_id: order.order_id,
-        prefill: { name: user?.name, email: user?.email },
-        theme: { color: '#2563eb' },
-        handler: async (resp) => {
-          try {
-            await api.post('/payments/verify', {
-              booking_id: booking.id,
-              razorpay_order_id: resp.razorpay_order_id,
-              razorpay_payment_id: resp.razorpay_payment_id,
-              razorpay_signature: resp.razorpay_signature
-            })
-            setNote(`Payment successful — booking #${booking.id} is confirmed. See it under Sessions once scheduled.`)
-            playUiSound('success')
-            load()
-          } catch (e) {
-            setErr(`Payment verification failed: ${e.message}`)
-            playUiSound('error')
-            load()
-          }
+      const result = await startRazorpayCheckout(booking, user, {
+        onSuccess: () => {
+          setNote(`Payment successful — booking #${booking.id} is confirmed. See it under Sessions once scheduled.`)
+          load()
         }
       })
-      rzp.open()
+      if (result instanceof Error) setErr(`Payment verification failed: ${result.message}`)
     } catch (e) {
       setErr(e.message)
       playUiSound('error')
