@@ -30,22 +30,31 @@ export default function RequestSlot() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    api
-      .get(`/teachers/${teacherId}`)
-      .then((res) => {
-        const t = res.teacher ?? res
-        setTeacher(t)
-        const availableDays = new Set((t.availability || []).map((a) => dayIndex(a.day)))
-        const now = new Date()
-        for (let i = 0; i < 7; i += 1) {
-          const probe = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i)
-          if (availableDays.has(probe.getDay())) {
-            setDate(`${probe.getFullYear()}-${String(probe.getMonth() + 1).padStart(2, '0')}-${String(probe.getDate()).padStart(2, '0')}`)
-            break
+    let firstLoad = true
+    const load = () => {
+      api
+        .get(`/teachers/${teacherId}`)
+        .then((res) => {
+          const t = res.teacher ?? res
+          setTeacher(t)
+          if (firstLoad) {
+            firstLoad = false
+            const availableDays = new Set((t.availability || []).map((a) => dayIndex(a.day)))
+            const now = new Date()
+            for (let i = 0; i < 7; i += 1) {
+              const probe = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i)
+              if (availableDays.has(probe.getDay())) {
+                setDate(`${probe.getFullYear()}-${String(probe.getMonth() + 1).padStart(2, '0')}-${String(probe.getDate()).padStart(2, '0')}`)
+                break
+              }
+            }
           }
-        }
-      })
-      .catch((e) => setErr(e.message))
+        })
+        .catch((e) => setErr(e.message))
+    }
+    load()
+    const interval = window.setInterval(load, 5000)
+    return () => window.clearInterval(interval)
   }, [teacherId])
 
   const weekday = useMemo(
