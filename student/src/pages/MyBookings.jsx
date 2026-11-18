@@ -32,6 +32,15 @@ export default function MyBookings() {
 
   useEffect(() => {
     load()
+    const interval = window.setInterval(load, 5000)
+    const refresh = () => load()
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
   }, [])
 
   async function payNow(booking) {
