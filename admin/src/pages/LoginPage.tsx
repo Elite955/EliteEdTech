@@ -3,9 +3,11 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { ArrowRight, Eye, EyeOff, KeyRound, ShieldCheck } from 'lucide-react'
 import type { AuthenticatedUser, Permission } from '../auth/context'
-import { homePathForUser } from '../auth/roleRoutes'
+import { PortalRedirect } from '../auth/PortalRedirect'
+import { homePathForUser, portalUrlForUser } from '../auth/roleRoutes'
 import { useAuth } from '../auth/useAuth'
 import { api, getErrorMessage } from '../lib/api'
+import { playUiSound } from '../lib/sound'
 
 type LoginReply = {
   user?: AuthenticatedUser
@@ -31,11 +33,21 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [resetMessage, setResetMessage] = useState('')
 
-  if (user) return <Navigate to={homePathForUser(user)} replace />
+  if (user) {
+    const portalUrl = portalUrlForUser(user)
+    if (portalUrl) return <PortalRedirect url={portalUrl} />
+    return <Navigate to={homePathForUser(user)} replace />
+  }
 
   async function completeSignIn(reply: LoginReply) {
     if (!reply.user || !reply.permissions) throw new Error('The server returned an incomplete sign-in response.')
     setSession(reply.user, reply.permissions)
+    playUiSound('success')
+    const portalUrl = portalUrlForUser(reply.user)
+    if (portalUrl) {
+      window.location.replace(portalUrl)
+      return
+    }
     navigate(homePathForUser(reply.user), { replace: true })
   }
 
@@ -47,7 +59,7 @@ export function LoginPage() {
       if (stage === 'credentials') {
         const reply = await api<LoginReply>('/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ email, password, rememberMe }),
+          body: JSON.stringify({ email, password, rememberMe, portal: 'admin' }),
         })
         if (reply.requiresMfaSetup && reply.challenge && reply.otpAuthUrl) {
           setChallenge(reply.challenge)
@@ -69,6 +81,7 @@ export function LoginPage() {
       }
     } catch (requestError) {
       setError(getErrorMessage(requestError))
+      playUiSound('error')
     } finally {
       setBusy(false)
     }
@@ -90,6 +103,7 @@ export function LoginPage() {
       setResetMessage(reply.message)
     } catch (requestError) {
       setError(getErrorMessage(requestError))
+      playUiSound('error')
     } finally {
       setBusy(false)
     }
@@ -112,7 +126,6 @@ export function LoginPage() {
           <h1>Manage the work behind every class.</h1>
           <p>Review users, roles, bookings, and platform activity from one secure workspace.</p>
         </div>
-        <div className="brand-footer"><ShieldCheck size={17} /> One account for the whole platform</div>
       </section>
       <section className="login-panel">
         <div className="login-card">
@@ -163,7 +176,6 @@ export function LoginPage() {
           </form>
           <div className="login-security"><ShieldCheck size={15} /> Encrypted session · secure access</div>
         </div>
-        <p className="login-legal">Students, teachers, and administrators use the same sign-in.</p>
       </section>
     </main>
   )

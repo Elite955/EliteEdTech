@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
+import CompletionEffect from '../components/CompletionEffect'
+import JoinClassDialog from '../components/JoinClassDialog'
 
 export default function SessionHistory() {
   const [sessions, setSessions] = useState(null)
   const [err, setErr] = useState('')
+  const [joining, setJoining] = useState(null)
 
   useEffect(() => {
     api
@@ -28,6 +31,9 @@ export default function SessionHistory() {
         <div className="slist">
           {sessions.map((s) => (
             <div key={s.booking_id} className="card session-card">
+              {s.status === 'completed' && (
+                <CompletionEffect bookingId={s.booking_id} detail={`Class with ${s.teacher?.name || 'your teacher'} is in the books.`} />
+              )}
               <div className="spread">
                 <div>
                   <strong>{s.teacher?.name || 'Teacher'}</strong> <StatusBadge status={s.status || 'completed'} />
@@ -43,10 +49,10 @@ export default function SessionHistory() {
                   </div>
                 </div>
                 <div className="row">
-                  {s.meeting_url && (
-                    <a className="btn small" href={s.meeting_url} target="_blank" rel="noreferrer">
-                      Join on Zoom
-                    </a>
+                  {s.session_id && ['scheduled', 'ongoing'].includes(s.status) && !['cancelled', 'rejected', 'completed'].includes(s.booking_status) && (
+                    <button className="btn small" type="button" onClick={() => setJoining(s)}>
+                      Join class
+                    </button>
                   )}
                   {s.recording_consent && s.recording_url ? (
                     <a className="btn small ghost" href={s.recording_url} target="_blank" rel="noreferrer">
@@ -61,6 +67,7 @@ export default function SessionHistory() {
           ))}
         </div>
       )}
+      {joining && <JoinClassDialog session={joining} onClose={() => setJoining(null)} />}
     </div>
   )
 }

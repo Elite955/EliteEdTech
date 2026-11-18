@@ -1,5 +1,4 @@
 ﻿import { Router } from 'express';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createHash, randomUUID } from 'node:crypto';
 import { generateSecret, generateSync, generateURI, verifySync } from 'otplib';
@@ -9,6 +8,8 @@ import { decryptField, encryptField } from '../security/fieldEncryption.js';
 import { writeAudit } from '../security/audit.js';
 import { requireAuthenticatedUser } from '../security/authMiddleware.js';
 import { isPasswordResetConfigured, sendPasswordResetEmail } from '../security/passwordReset.js';
+import { hashPassword, passwordHashNeedsUpgrade, verifyPassword } from '../security/passwords.js';
+import { clearPortalCookies, setPortalCookie } from '../security/portals.js';
 
 export const authRouter = Router();
 
@@ -17,6 +18,7 @@ const loginSchema = z.object({
   password: z.string().min(1).max(256),
   code: z.string().regex(/^\d{6}$/).optional(),
   rememberMe: z.boolean().default(false),
+  portal: z.enum(['student', 'teacher', 'admin']).default('student'),
 });
 const registerSchema = z.object({
   role: z.enum(['student', 'teacher']).default('student'),
@@ -40,8 +42,8 @@ const resetConfirmSchema = z.object({
   password: z.string().min(12).max(128),
 });
 
-function issueChallenge(userId, type, rememberMe = false) {
-  return jwt.sign({ sub: userId, type, rememberMe }, process.env.JWT_SECRET, { expiresIn: '5m' });
+function issueChallenge(userId, type, rememberMe = false, portal) {
+  return jwt.sign({ sub: userId, type, rememberMe, portal }, process.env.JWT_SECRET, { expiresIn: '5m' });
 }
 
 function studentShape(user) {
@@ -51,6 +53,7 @@ function studentShape(user) {
     email: user.email,
     role: 'Student',
     roleCode: 'student',
+    phone: user.phone ?? null,
     age: user.age ?? null,
     grade: user.grade ?? null,
   };
@@ -70,28 +73,12 @@ async function createSession(req, res, userId, rememberMe = false) {
     [sessionId, userId, expiresAt, req.ip, req.get('user-agent') ?? null],
   );
   const token = jwt.sign({ sub: userId, sid: sessionId, type: 'session' }, process.env.JWT_SECRET, { expiresIn: rememberMe ? '30d' : '8h' });
-  res.clearCookie('admin_session', cookieOptions());
-  res.cookie('edtech_session', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    path: '/',
-    expires: expiresAt,
-  });
+  setPortalCookie(res, 'admin', token, expiresAt);
   await pool.query('UPDATE admin_profiles SET last_login_at = now() WHERE user_id = $1', [userId]);
   return sessionId;
 }
 
-function cookieOptions() {
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    path: '/',
-  };
-}
-
-async function createUserSession(req, res, userId, rememberMe = false) {
+async function createUserSession(req, res, userId, rememberMe = false, portal = 'student') {
   const sessionId = randomUUID();
   const expiresAt = new Date(Date.now() + (rememberMe ? 30 * 24 * 60 * 60 * 1000 : 8 * 60 * 60 * 1000));
   await pool.query(
@@ -105,11 +92,7 @@ async function createUserSession(req, res, userId, rememberMe = false) {
     [sessionId, userId, expiresAt, req.ip, req.get('user-agent') ?? null],
   );
   const token = jwt.sign({ sub: userId, sid: sessionId, type: 'session' }, process.env.JWT_SECRET, { expiresIn: rememberMe ? '30d' : '8h' });
-  res.clearCookie('admin_session', cookieOptions());
-  res.cookie('edtech_session', token, {
-    ...cookieOptions(),
-    expires: expiresAt,
-  });
+  setPortalCookie(res, portal, token, expiresAt);
   return sessionId;
 }
 
@@ -130,14 +113,16 @@ authRouter.post('/register', async (req, res, next) => {
     const input = registerSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json({ error: 'Check the highlighted fields and try again.' });
 
-    const { name, email, phone, password, age, grade, role, hourly_rate, subjects, bio } = input.data;
+    const { name, email, phone, password, age, grade, role, subjects, bio, hourly_rate } = input.data;
     if (role === 'student' && age === undefined) {
       return res.status(400).json({ error: 'Age is required for a student account.' });
     }
-    if (role === 'teacher' && (hourly_rate === undefined || !subjects?.length)) {
-      return res.status(400).json({ error: 'Hourly rate and at least one subject are required for a teacher account.' });
+    if (role === 'teacher') {
+      if (!phone) return res.status(400).json({ error: 'A phone number is required for a teacher account.' });
+      if (!subjects?.length) return res.status(400).json({ error: 'Add at least one subject you teach.' });
+      if (hourly_rate == null) return res.status(400).json({ error: 'An hourly rate is required for a teacher account.' });
     }
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await hashPassword(password);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -150,18 +135,10 @@ authRouter.post('/register', async (req, res, next) => {
       const user = rows[0];
       if (role === 'teacher') {
         await client.query(
-          `INSERT INTO teacher_profiles (user_id, subjects, bio, hourly_rate, approved) VALUES ($1, $2, $3, $4, true)`,
+          `INSERT INTO teacher_profiles (user_id, subjects, bio, hourly_rate, approved)
+           VALUES ($1, $2, $3, $4, true)`,
           [user.id, subjects, bio ?? null, hourly_rate],
         );
-        for (const weekday of [1, 2, 3, 4, 5]) {
-          for (const [start, end] of [['16:00', '18:00'], ['19:00', '21:00']]) {
-            await client.query(
-              `INSERT INTO teacher_availability (teacher_id, weekday, start_time, end_time) VALUES ($1, $2, $3::time, $4::time)
-               ON CONFLICT (teacher_id, weekday, start_time, end_time) DO NOTHING`,
-              [user.id, weekday, start, end],
-            );
-          }
-        }
       } else {
         await client.query('INSERT INTO student_profiles (user_id, age, grade) VALUES ($1, $2, $3)', [
           user.id,
@@ -172,11 +149,11 @@ authRouter.post('/register', async (req, res, next) => {
       await client.query('COMMIT');
       await writeAudit(req, {
         actorId: user.id,
-        event: role === 'teacher' ? 'teacher_registered' : 'student_registered',
+        event: `${role}_registered`,
         module: role === 'teacher' ? 'teachers' : 'students',
         targetId: user.id,
       });
-      return res.status(201).json({ user: { id: user.id, name: user.name, email: user.email } });
+      return res.status(201).json({ user: { id: user.id, name: user.name, email: user.email, role } });
     } catch (error) {
       await client.query('ROLLBACK');
       if (error.code === '23505') {
@@ -200,7 +177,7 @@ authRouter.post('/login', async (req, res, next) => {
 
     const email = input.data.email.toLowerCase();
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.email, u.password_hash, u.status, u.role,
+      `SELECT u.id, u.name, u.email, u.phone, u.password_hash, u.status, u.role,
               ap.mfa_secret_encrypted, ap.mfa_pending_secret_encrypted, ap.mfa_pending_expires_at,
               sp.mfa_secret_encrypted AS student_mfa_secret, sp.mfa_pending_secret_encrypted AS student_pending_secret,
               sp.mfa_pending_expires_at AS student_pending_expires_at, sp.age, sp.grade,
@@ -213,14 +190,35 @@ authRouter.post('/login', async (req, res, next) => {
       [email],
     );
     const user = rows[0];
-    if (!user || user.status !== 'active' || !(await bcrypt.compare(input.data.password, user.password_hash)) ||
+    if (!user || user.status !== 'active' || !(await verifyPassword(input.data.password, user.password_hash)) ||
         (user.role === 'admin' && !user.role_code)) {
       await writeAudit(req, { event: 'login_failed', module: 'security', details: { email } });
       return res.status(401).json({ error: 'Email or password is incorrect, or the account is unavailable.' });
     }
 
+    if (input.data.portal !== user.role) {
+      await writeAudit(req, {
+        event: 'login_portal_mismatch',
+        module: 'security',
+        details: { email, portal: input.data.portal, accountRole: user.role },
+      });
+      return res.status(403).json({
+        error: `This account signs in through the ${user.role} portal.`,
+        portal: user.role,
+      });
+    }
+
+    if (passwordHashNeedsUpgrade(user.password_hash)) {
+      try {
+        const upgraded = await hashPassword(input.data.password);
+        await pool.query('UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1', [user.id, upgraded]);
+      } catch {
+        // Login still succeeds; the hash upgrades on the next successful sign-in.
+      }
+    }
+
     if (user.role === 'teacher') {
-      const sessionId = await createUserSession(req, res, user.id, input.data.rememberMe);
+      const sessionId = await createUserSession(req, res, user.id, input.data.rememberMe, 'teacher');
       await writeAudit(req, { actorId: user.id, event: 'login_succeeded', module: 'security', targetId: sessionId });
       return res.json({
         user: { id: user.id, name: user.name, email: user.email, role: user.role_name, roleCode: user.role_code ?? user.role },
@@ -231,7 +229,7 @@ authRouter.post('/login', async (req, res, next) => {
     if (user.role === 'student') {
       if (user.student_mfa_secret) {
         if (!input.data.code) {
-          return res.json({ requiresMfa: true, challenge: issueChallenge(user.id, 'mfa_login', input.data.rememberMe) });
+          return res.json({ requiresMfa: true, challenge: issueChallenge(user.id, 'mfa_login', input.data.rememberMe, 'student') });
         }
         const secret = decryptField(user.student_mfa_secret);
         if (!verifySync({ secret, token: input.data.code, epochTolerance: 30 }).valid) {
@@ -253,13 +251,13 @@ authRouter.post('/login', async (req, res, next) => {
         const rawSecret = decryptField(secret);
         return res.json({
           requiresMfaSetup: true,
-          challenge: issueChallenge(user.id, 'mfa_setup', input.data.rememberMe),
+          challenge: issueChallenge(user.id, 'mfa_setup', input.data.rememberMe, 'student'),
           otpAuthUrl: generateURI({ secret: rawSecret, issuer: 'EdTech Platform', label: user.email }),
           accountName: user.email,
         });
       }
 
-      const sessionId = await createUserSession(req, res, user.id, input.data.rememberMe);
+      const sessionId = await createUserSession(req, res, user.id, input.data.rememberMe, 'student');
       await writeAudit(req, { actorId: user.id, event: 'login_succeeded', module: 'security', targetId: sessionId });
       return res.json({
         user: studentShape(user),
@@ -269,7 +267,7 @@ authRouter.post('/login', async (req, res, next) => {
 
     if (user.mfa_secret_encrypted) {
       if (!input.data.code) {
-        return res.json({ requiresMfa: true, challenge: issueChallenge(user.id, 'mfa_login', input.data.rememberMe) });
+        return res.json({ requiresMfa: true, challenge: issueChallenge(user.id, 'mfa_login', input.data.rememberMe, 'admin') });
       }
       const secret = decryptField(user.mfa_secret_encrypted);
       if (!verifySync({ secret, token: input.data.code, epochTolerance: 30 }).valid) {
@@ -291,7 +289,7 @@ authRouter.post('/login', async (req, res, next) => {
       const rawSecret = decryptField(secret);
       return res.json({
         requiresMfaSetup: true,
-        challenge: issueChallenge(user.id, 'mfa_setup', input.data.rememberMe),
+        challenge: issueChallenge(user.id, 'mfa_setup', input.data.rememberMe, 'admin'),
         otpAuthUrl: generateURI({ secret: rawSecret, issuer: 'EdTech Platform', label: user.email }),
         accountName: user.email,
       });
@@ -314,9 +312,12 @@ authRouter.post('/mfa/confirm', async (req, res, next) => {
     if (!input.success) return res.status(400).json({ error: 'A valid authenticator code is required.' });
     const claims = jwt.verify(input.data.challenge, process.env.JWT_SECRET);
     if (claims.type !== 'mfa_setup') return res.status(401).json({ error: 'The setup challenge is invalid or expired.' });
+    if (claims.portal !== 'admin' && claims.portal !== 'student') {
+      return res.status(401).json({ error: 'The setup challenge is invalid or expired.' });
+    }
 
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.email, u.status, u.role,
+      `SELECT u.id, u.name, u.email, u.phone, u.status, u.role,
               r.code AS role_code, r.name AS role_name,
               ap.mfa_pending_secret_encrypted, ap.mfa_pending_expires_at,
               sp.mfa_pending_secret_encrypted AS student_pending_secret,
@@ -325,11 +326,11 @@ authRouter.post('/mfa/confirm', async (req, res, next) => {
        LEFT JOIN admin_profiles ap ON ap.user_id = u.id
        LEFT JOIN admin_roles r ON r.id = ap.role_id
        LEFT JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE u.id = $1 AND u.role IN ('admin', 'student')`,
-      [claims.sub],
+       WHERE u.id = $1 AND u.role = $2`,
+      [claims.sub, claims.portal],
     );
     const user = rows[0];
-    const isAdmin = user?.role === 'admin';
+    const isAdmin = claims.portal === 'admin';
     const pendingSecret = isAdmin ? user.mfa_pending_secret_encrypted : user?.student_pending_secret;
     const pendingExpiry = isAdmin ? user.mfa_pending_expires_at : user?.student_pending_expires_at;
     if (!user || user.status !== 'active' || (isAdmin && !user.role_code) || !pendingSecret ||
@@ -358,7 +359,7 @@ authRouter.post('/mfa/confirm', async (req, res, next) => {
     }
     const sessionId = isAdmin
       ? await createSession(req, res, user.id, claims.rememberMe)
-      : await createUserSession(req, res, user.id, claims.rememberMe);
+      : await createUserSession(req, res, user.id, claims.rememberMe, 'student');
     await writeAudit(req, { actorId: user.id, event: 'mfa_enrolled', module: 'security' });
     await writeAudit(req, { actorId: user.id, event: 'login_succeeded', module: 'security', targetId: sessionId });
     if (isAdmin) {
@@ -385,16 +386,19 @@ authRouter.post('/mfa/verify', async (req, res, next) => {
     if (!input.success) return res.status(400).json({ error: 'A valid authenticator code is required.' });
     const claims = jwt.verify(input.data.challenge, process.env.JWT_SECRET);
     if (claims.type !== 'mfa_login') return res.status(401).json({ error: 'The sign-in challenge is invalid or expired.' });
+    if (claims.portal !== 'admin' && claims.portal !== 'student') {
+      return res.status(401).json({ error: 'The sign-in challenge is invalid or expired.' });
+    }
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.email, u.status, u.role,
+      `SELECT u.id, u.name, u.email, u.phone, u.status, u.role,
               r.code AS role_code, r.name AS role_name,
               ap.mfa_secret_encrypted, sp.mfa_secret_encrypted AS student_mfa_secret, sp.age, sp.grade
        FROM users u
        LEFT JOIN admin_profiles ap ON ap.user_id = u.id
        LEFT JOIN admin_roles r ON r.id = ap.role_id
        LEFT JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE u.id = $1 AND u.role IN ('admin', 'student')`,
-      [claims.sub],
+       WHERE u.id = $1 AND u.role = $2`,
+      [claims.sub, claims.portal],
     );
     const user = rows[0];
     const mfaSecret = user?.role === 'admin' ? user.mfa_secret_encrypted : user?.student_mfa_secret;
@@ -412,7 +416,7 @@ authRouter.post('/mfa/verify', async (req, res, next) => {
         permissions: await permissionsFor(user.id),
       });
     }
-    const sessionId = await createUserSession(req, res, user.id, claims.rememberMe);
+    const sessionId = await createUserSession(req, res, user.id, claims.rememberMe, 'student');
     await writeAudit(req, { actorId: user.id, event: 'login_succeeded', module: 'security', targetId: sessionId });
     return res.json({
       user: studentShape(user),
@@ -449,7 +453,7 @@ authRouter.post('/password-reset/confirm', async (req, res, next) => {
     const input = resetConfirmSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json({ error: 'Provide a valid reset link and a password of at least 12 characters.' });
     const tokenHash = createHash('sha256').update(input.data.token).digest('hex');
-    const passwordHash = await bcrypt.hash(input.data.password, 12);
+    const passwordHash = await hashPassword(input.data.password);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -483,7 +487,9 @@ authRouter.get('/me', requireAuthenticatedUser, async (req, res, next) => {
   try {
     if (req.auth.account_role === 'student') {
       const { rows } = await pool.query(
-        'SELECT age, grade FROM student_profiles WHERE user_id = $1',
+        `SELECT u.phone, sp.age, sp.grade
+         FROM users u LEFT JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE u.id = $1`,
         [req.auth.id],
       );
       const profile = rows[0] ?? {};
@@ -494,6 +500,7 @@ authRouter.get('/me', requireAuthenticatedUser, async (req, res, next) => {
           email: req.auth.email,
           role: 'Student',
           roleCode: 'student',
+          phone: profile.phone ?? null,
           age: profile.age ?? null,
           grade: profile.grade ?? null,
         },
@@ -523,8 +530,7 @@ authRouter.post('/logout', requireAuthenticatedUser, async (req, res, next) => {
       await pool.query('UPDATE user_sessions SET revoked_at = now() WHERE id = $1', [req.auth.session_id]);
     }
     await writeAudit(req, { event: 'logout', module: 'security', targetId: req.auth.session_id });
-    res.clearCookie('edtech_session', cookieOptions());
-    res.clearCookie('admin_session', cookieOptions());
+    clearPortalCookies(res, req.auth.session_portal ?? null);
     return res.status(204).end();
   } catch (error) {
     return next(error);

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { playUiSound } from '../lib/sound'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -97,12 +98,14 @@ export default function RequestSlot() {
       const booking = res.booking || {}
       setNote(
         `Request sent! Booking #${booking.id} is pending teacher approval. ` +
-          `Amount: â‚¹${booking.amount} for ${hours} hour${hours === 1 ? '' : 's'} (${slot.start}â€“${slot.end}).`
+          `Amount: ₹${booking.amount} for ${hours} hour${hours === 1 ? '' : 's'} (${slot.start}–${slot.end}).`
       )
       setStart('')
       setDuration(0)
+      playUiSound('success')
     } catch (e) {
       setErr(e.message)
+      playUiSound('error')
     } finally {
       setBusy(false)
     }
@@ -113,7 +116,7 @@ export default function RequestSlot() {
       <div>
         <h1>Request a slot</h1>
         <div className="alert error">{err}</div>
-        <Link className="link" to="/teachers">â† Back to teachers</Link>
+        <Link className="link" to="/teachers">← Back to teachers</Link>
       </div>
     )
   }
@@ -123,14 +126,14 @@ export default function RequestSlot() {
       <h1>Request a slot</h1>
       <p className="page-sub">
         {teacher
-          ? `With ${teacher.name} â€” â‚¹${teacher.hourly_rate}/hour. The platform computes the final amount from the teacher's rate; it is confirmed on approval.`
-          : 'Loading teacherâ€¦'}
+          ? `With ${teacher.name} — ₹${teacher.hourly_rate}/hour. The platform computes the final amount from the teacher's rate; it is confirmed on approval.`
+          : 'Loading teacher…'}
       </p>
 
       {err && <div className="alert error">{err}</div>}
       {note && (
         <div className="alert success">
-          {note} <Link className="link" to="/bookings">Track it in My Bookings â†’</Link>
+          {note} <Link className="link" to="/bookings">Track it in My Bookings →</Link>
         </div>
       )}
 
@@ -168,10 +171,10 @@ export default function RequestSlot() {
                   setDuration(0)
                 }}
               >
-                <option value="">Choose a start timeâ€¦</option>
+                <option value="">Choose a start time…</option>
                 {starts.map((s, i) => (
                   <option key={i} value={s.value}>
-                    {s.value} â€” window {s.window.start}â€“{s.window.end}
+                    {s.value} — window {s.window.start}–{s.window.end}
                   </option>
                 ))}
               </select>
@@ -186,7 +189,7 @@ export default function RequestSlot() {
                   value={duration || ''}
                   onChange={(e) => setDuration(Number(e.target.value))}
                 >
-                  <option value="">Choose a lengthâ€¦</option>
+                  <option value="">Choose a length…</option>
                   {durations.map((d) => (
                     <option key={d} value={d}>{d} minutes</option>
                   ))}
@@ -198,14 +201,14 @@ export default function RequestSlot() {
 
         {slot && (
           <p className="muted" style={{ marginBottom: 10 }}>
-            Selected: {DAYS[weekday]} {slot.start}â€“{slot.end} ({hours} hour{hours === 1 ? '' : 's'}) â€”
-            estimated â‚¹{((hours * (teacher?.hourly_rate || 0)) * 100 / 100).toFixed(2)}
+            Selected: {DAYS[weekday]} {slot.start}–{slot.end} ({hours} hour{hours === 1 ? '' : 's'}) —
+            estimated ₹{((hours * (teacher?.hourly_rate || 0)) * 100 / 100).toFixed(2)}
           </p>
         )}
 
         <form onSubmit={submit}>
           <button className="btn" disabled={!slot || busy}>
-            {busy ? 'Sendingâ€¦' : 'Request this timing'}
+            {busy ? 'Sending…' : 'Request this timing'}
           </button>
         </form>
         <p className="muted" style={{ marginTop: 12 }}>

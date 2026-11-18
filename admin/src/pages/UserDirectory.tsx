@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Download, Plus, Search, UserRound, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
+import { useSuccessBurst } from '../components/useSuccessBurst'
 import { api, getErrorMessage } from '../lib/api'
+import { playUiSound } from '../lib/sound'
 
 type Person = {
   id: string
@@ -13,12 +15,14 @@ type Person = {
   age?: number | null
   grade?: string | null
   subjects?: string[]
+  bio?: string | null
   hourly_rate?: number | null
   approved?: boolean
 }
 
 export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
   const { can } = useAuth()
+  const { celebrate, burst } = useSuccessBurst()
   const [items, setItems] = useState<Person[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -29,7 +33,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkStatus, setBulkStatus] = useState<'active' | 'suspended' | 'deactivated'>('suspended')
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', hourlyRate: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', bio: '', hourlyRate: '' })
   const canCreate = can(`${role}s`, 'create')
   const canEdit = can(`${role}s`, 'edit')
   const canExport = can(`${role}s`, 'export')
@@ -78,15 +82,17 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
     try {
       await api(`/admin/${role}s/${item.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
       setNotice(`${item.name} is now ${status}.`)
+      celebrate('Account updated', `${item.name} is now ${status}.`)
       await load()
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     }
   }
 
   function openCreateDialog() {
     setEditingPerson(null)
-    setForm({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', hourlyRate: '' })
+    setForm({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', bio: '', hourlyRate: '' })
     setError('')
     setNotice('')
     setDialogOpen(true)
@@ -102,6 +108,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
       age: item.age == null ? '' : String(item.age),
       grade: item.grade ?? '',
       subjects: item.subjects?.join(', ') ?? '',
+      bio: item.bio ?? '',
       hourlyRate: item.hourly_rate == null ? '' : String(item.hourly_rate),
     })
     setError('')
@@ -116,7 +123,9 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
     try {
       const result = await api<{ message: string }>(`/admin/${role}s/${item.id}/password-reset`, { method: 'POST' })
       setNotice(result.message)
+      celebrate('Reset link sent', item.email)
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     }
   }
@@ -151,9 +160,11 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
         body: JSON.stringify({ ids: selectedIds, status: bulkStatus }),
       })
       setNotice(result.message)
+      celebrate('Bulk update complete', `${selectedIds.length} account(s) updated.`)
       setSelectedIds([])
       await load()
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     }
   }
@@ -169,6 +180,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
         grade: form.grade || null,
       } : {
         subjects: form.subjects.split(',').map((subject) => subject.trim()).filter(Boolean),
+        bio: form.bio.trim() || null,
         hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : null,
       }
       if (editingPerson) {
@@ -177,18 +189,21 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
           body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone || null, ...profile }),
         })
         setNotice(`${role === 'student' ? 'Student' : 'Teacher'} account updated.`)
+        celebrate('Account updated')
       } else {
         await api(`/admin/${role}s`, {
           method: 'POST',
           body: JSON.stringify({ name: form.name, email: form.email, password: form.password, phone: form.phone || null, ...profile }),
         })
         setNotice(`${role === 'student' ? 'Student' : 'Teacher'} account created.`)
+        celebrate('Account created')
       }
       setDialogOpen(false)
       setEditingPerson(null)
-      setForm({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', hourlyRate: '' })
+      setForm({ name: '', email: '', password: '', phone: '', age: '', grade: '', subjects: '', bio: '', hourlyRate: '' })
       await load()
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     } finally {
       setSaving(false)
@@ -198,6 +213,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
   const heading = role === 'student' ? 'Students' : 'Teachers'
   return (
     <div className="directory-page">
+      {burst}
       <div className="page-intro">
         <div><p className="eyebrow">USER MANAGEMENT</p><h2>{heading}</h2><p>Search, review, and manage {role} accounts across the platform.</p></div>
         <div className="intro-actions">
@@ -260,6 +276,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
                 <label>Grade / class<input value={form.grade} onChange={(event) => setForm({ ...form, grade: event.target.value })} /></label>
               </> : <>
                 <label>Subjects <small>Separate subjects with commas.</small><input value={form.subjects} onChange={(event) => setForm({ ...form, subjects: event.target.value })} /></label>
+                <label>Short bio <small>Shown to students on the teacher profile. Up to 600 characters.</small><textarea rows={3} maxLength={600} value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label>
                 <label>Hourly rate (INR)<input type="number" min="0" step="0.01" value={form.hourlyRate} onChange={(event) => setForm({ ...form, hourlyRate: event.target.value })} /></label>
               </>}
               {error && <div role="alert" className="form-error">{error}</div>}

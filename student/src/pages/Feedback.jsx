@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
+import { playUiSound } from '../lib/sound'
 
 export default function Feedback() {
   const [params] = useSearchParams()
@@ -56,8 +57,10 @@ export default function Feedback() {
       setText('')
       const f = await api.get('/feedback/mine')
       setMine(f.feedback || [])
+      playUiSound('success')
     } catch (e) {
       setErr(e.message)
+      playUiSound('error')
     } finally {
       setBusy(false)
     }

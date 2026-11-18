@@ -5,8 +5,8 @@ import { pool } from '../db/pool.js';
 import { requireAuthenticatedUser } from '../security/authMiddleware.js';
 import { writeAudit } from '../security/audit.js';
 import { createOrder, publicKeyId, razorpayConfigured, verifyPaymentSignature, verifyWebhookSignature } from '../payments/razorpay.js';
-import { createMeeting } from '../zoom/zoom.js';
-import { deliverBookingConfirmation } from '../notifications/notifier.js';
+import { ensureSessionMeeting } from '../meetings/service.js';
+import { sendBookingDetails } from '../notifications/notifier.js';
 
 export const studentRouter = Router();
 
@@ -33,6 +33,79 @@ function minutesBetween(startTime, endTime) {
 function validationError(res, result) {
   return res.status(400).json({ error: 'Some details are missing or invalid.', details: result.error.issues });
 }
+
+const profileUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  phone: z.string().trim().regex(/^[+0-9 ()-]{7,20}$/).nullable().optional(),
+  age: z.number().int().min(5).max(100).nullable().optional(),
+  grade: z.string().trim().max(80).nullable().optional(),
+}).refine((value) => Object.keys(value).length > 0, {
+  message: 'Provide at least one profile field to update.',
+});
+
+async function loadStudentProfile(userId) {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.email, u.phone, u.created_at, sp.age, sp.grade
+     FROM users u LEFT JOIN student_profiles sp ON sp.user_id = u.id
+     WHERE u.id = $1 AND u.role = 'student'`,
+    [userId],
+  );
+  return rows[0] ?? null;
+}
+
+studentRouter.get('/profile', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
+  try {
+    const profile = await loadStudentProfile(req.auth.id);
+    if (!profile) return res.status(404).json({ error: 'Student profile not found.' });
+    return res.json({ profile });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+studentRouter.patch('/profile', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
+  const parsed = profileUpdateSchema.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed);
+  const data = parsed.data;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rowCount } = await client.query(
+      `UPDATE users SET name = COALESCE($2, name),
+         phone = CASE WHEN $3::boolean THEN $4 ELSE phone END,
+         updated_at = now()
+       WHERE id = $1 AND role = 'student'`,
+      [req.auth.id, data.name ?? null, Object.hasOwn(data, 'phone'), data.phone ?? null],
+    );
+    if (!rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Student profile not found.' });
+    }
+    if (Object.hasOwn(data, 'age') || Object.hasOwn(data, 'grade')) {
+      await client.query(
+        `INSERT INTO student_profiles (user_id, age, grade) VALUES ($1, $3, $5)
+         ON CONFLICT (user_id) DO UPDATE SET
+           age = CASE WHEN $2::boolean THEN $3 ELSE student_profiles.age END,
+           grade = CASE WHEN $4::boolean THEN $5 ELSE student_profiles.grade END`,
+        [req.auth.id, Object.hasOwn(data, 'age'), data.age ?? null, Object.hasOwn(data, 'grade'), data.grade ?? null],
+      );
+    }
+    await client.query('COMMIT');
+    await writeAudit(req, {
+      actorId: req.auth.id,
+      event: 'student_profile_updated',
+      module: 'profile',
+      targetId: req.auth.id,
+      details: { fields: Object.keys(data) },
+    });
+    return res.json({ message: 'Profile updated.', profile: await loadStudentProfile(req.auth.id) });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
 
 const teacherQuerySchema = z.object({
   search: z.string().trim().max(80).optional(),
@@ -279,12 +352,55 @@ async function markBookingPaid(req, { bookingId, orderId, paymentId }) {
 
   const { rows: sessionRows } = await pool.query(
     `INSERT INTO class_sessions (booking_id, meeting_provider, meeting_url, status)
-     VALUES ($1, 'zoom', $2, 'scheduled') RETURNING meeting_url`,
+     VALUES ($1, 'zoom', $2, 'scheduled') RETURNING id, meeting_url`,
     [booking.id, null],
   );
   const session = sessionRows[0];
 
   return { booking, session };
+}
+
+async function notifyPaidBooking(booking) {
+  const { rows: personRows } = await pool.query(
+    `SELECT u.id, u.name, u.email, u.phone, u.role
+     FROM users u WHERE u.id = ANY($1::uuid[])`,
+    [[booking.student_id, booking.teacher_id]],
+  );
+  const student = personRows.find((row) => row.role === 'student');
+  const teacher = personRows.find((row) => row.role === 'teacher');
+  const { rows: sessionRows } = await pool.query(
+    `SELECT meeting_url FROM class_sessions WHERE booking_id = $1`,
+    [booking.id],
+  );
+  const date = new Date(booking.starts_at).toLocaleDateString('en-IN', { timeZone: IST_ZONE });
+  const startTime = new Date(booking.starts_at).toLocaleTimeString('en-IN', {
+    timeZone: IST_ZONE, hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  const endTime = new Date(booking.ends_at).toLocaleTimeString('en-IN', {
+    timeZone: IST_ZONE, hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  return sendBookingDetails(pool, personRows, {
+    bookingId: booking.id,
+    studentName: student?.name ?? 'Student',
+    teacherName: teacher?.name ?? 'your teacher',
+    date,
+    startTime,
+    endTime,
+    amount: Number(booking.amount),
+    meetingUrl: sessionRows[0]?.meeting_url ?? null,
+  });
+}
+
+async function finalizePaidBooking(result) {
+  const meeting = await ensureSessionMeeting(result.session.id);
+  const delivery = await notifyPaidBooking(result.booking);
+  return { ...result, meeting, delivery };
+}
+
+async function completePaidBooking(req, { bookingId, orderId, paymentId }) {
+  const result = await markBookingPaid(req, { bookingId, orderId, paymentId });
+  if (!result) return null;
+  return finalizePaidBooking(result);
 }
 
 studentRouter.post('/payments/verify', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
@@ -308,37 +424,14 @@ studentRouter.post('/payments/verify', requireAuthenticatedUser, requireStudent,
       return res.status(400).json({ error: 'No pending payment matches this checkout session.' });
     }
 
-    const result = await markBookingPaid(req, { bookingId: payment.booking_id, orderId: razorpay_order_id, paymentId: razorpay_payment_id });
+    const result = await completePaidBooking(req, {
+      bookingId: payment.booking_id, orderId: razorpay_order_id, paymentId: razorpay_payment_id,
+    });
     if (!result) {
       return res.json({ status: 'paid' });
     }
-    const { booking, session } = result;
-
-    const { rows: personRows } = await pool.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.role, sp.age
-       FROM users u LEFT JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE u.id = ANY($1::uuid[])`,
-      [[booking.student_id, booking.teacher_id]],
-    );
-    const date = new Date(booking.starts_at).toLocaleDateString('en-IN', { timeZone: IST_ZONE });
-    const startTime = new Date(booking.starts_at).toLocaleTimeString('en-IN', { timeZone: IST_ZONE, hour: '2-digit', minute: '2-digit', hour12: false });
-    const endTime = new Date(booking.ends_at).toLocaleTimeString('en-IN', { timeZone: IST_ZONE, hour: '2-digit', minute: '2-digit', hour12: false });
-    const student = personRows.find((row) => row.role === 'student');
-    const teacher = personRows.find((row) => row.role === 'teacher');
 
     await writeAudit(req, { actorId: req.auth.id, event: 'payment_succeeded', module: 'transactions', targetId: razorpay_payment_id });
-
-    const notificationContext = {
-      studentName: student?.name ?? 'Student',
-      teacherName: teacher?.name ?? 'your teacher',
-      date,
-      startTime,
-      endTime,
-      amount: Number(booking.amount),
-      meetingUrl: session.meeting_url,
-    };
-    deliverBookingConfirmation(pool, personRows, notificationContext);
-
     return res.json({ status: 'paid' });
   } catch (error) {
     return next(error);
@@ -356,11 +449,18 @@ studentRouter.post('/payments/webhook', express.raw({ type: 'application/json', 
     const entity = event?.payload?.payment?.entity;
     if (event?.event === 'payment.captured' && entity) {
       const { rows } = await pool.query(
-        `SELECT id FROM payments WHERE provider_transaction_id = $1 AND status = 'pending'`,
+        `SELECT booking_id FROM payments WHERE provider_transaction_id = $1 AND status = 'pending'`,
         [entity.order_id],
       );
       if (rows.length) {
-        await markBookingPaid(req, { bookingId: rows[0].booking_id, orderId: entity.order_id, paymentId: entity.id });
+        const result = await markBookingPaid(req, {
+          bookingId: rows[0].booking_id, orderId: entity.order_id, paymentId: entity.id,
+        });
+        if (result) {
+          void finalizePaidBooking(result).catch((error) => {
+            console.error('Post-payment finalization failed:', error.message);
+          });
+        }
       }
     }
     return res.json({ received: true });
@@ -387,7 +487,9 @@ studentRouter.get('/payments/mine', requireAuthenticatedUser, requireStudent, as
 studentRouter.get('/sessions/mine', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT cs.booking_id, cs.meeting_url, cs.started_at, cs.ended_at, cs.recording_url, cs.recording_consent, cs.status,
+      `SELECT cs.id AS session_id, cs.booking_id, cs.meeting_url, cs.meeting_provider, cs.meeting_creation_status,
+              cs.started_at, cs.ended_at, cs.recording_url, cs.recording_consent, cs.status,
+              b.status AS booking_status,
               t.name AS teacher_name,
               to_char(b.starts_at AT TIME ZONE '${IST_ZONE}', 'YYYY-MM-DD') AS date,
               to_char(b.starts_at AT TIME ZONE '${IST_ZONE}', 'HH24:MI') AS start_time,
@@ -409,6 +511,41 @@ studentRouter.get('/sessions/mine', requireAuthenticatedUser, requireStudent, as
         teacher: { name: row.teacher_name },
         attendance_count: Number(row.attendance_count),
       })),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+studentRouter.post('/sessions/:id/meeting', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
+  try {
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const { rows } = await pool.query(
+      `SELECT cs.id, cs.status
+       FROM class_sessions cs
+       JOIN bookings b ON b.id = cs.booking_id
+       WHERE cs.id = $1 AND b.student_id = $2`,
+      [req.params.id, req.auth.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Class session not found.' });
+    if (['cancelled', 'completed'].includes(rows[0].status)) {
+      return res.status(400).json({ error: 'This class is no longer available to join.' });
+    }
+
+    const result = await ensureSessionMeeting(req.params.id);
+    const httpStatus = result.status === 'not_found' ? 404
+      : result.status === 'not_configured' ? 503
+        : result.status === 'failed' ? 502
+          : result.status === 'unavailable' ? 400
+            : 200;
+    return res.status(httpStatus).json({
+      status: result.status,
+      joinUrl: result.joinUrl ?? result.session?.meeting_url ?? null,
+      meetingId: result.meetingId ?? null,
+      error: result.error ?? null,
+      missingKeys: result.missingKeys ?? [],
     });
   } catch (error) {
     return next(error);

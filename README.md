@@ -54,7 +54,7 @@ Add folders as work begins; do not commit empty placeholders. See `TASKS.md` for
 
 ## Admin application (development)
 
-The web app uses **React + TypeScript + Vite**, **Node.js + Express**, and **PostgreSQL**. Students, teachers, and administrators use one shared sign-in page; successful sign-in routes each role to its own workspace. Admin accounts are created with the bootstrap seed, while student and teacher accounts are created by an administrator. There are no hard-coded demo credentials.
+The web app uses **React + TypeScript + Vite**, **Node.js + Express**, and **PostgreSQL**. Students and teachers register through their own portals, while administrator accounts are created with the bootstrap seed and in the admin console. Each role signs in to its own workspace. Demo seed credentials are documented for local development only.
 
 1. Install Node.js 22 or later and PostgreSQL. Create a local database named `edtech_admin`.
 2. From the repository root, run `Copy-Item .env.example .env`. Set `DATABASE_URL`, `BOOTSTRAP_ADMIN_PASSWORD` (at least 12 characters), and the bootstrap admin name and email. Generate random signing and encryption keys in PowerShell:

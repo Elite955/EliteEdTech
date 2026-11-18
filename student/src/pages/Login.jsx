@@ -1,8 +1,9 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { playUiSound } from '../lib/sound'
 
 export default function Login() {
   const { login } = useAuth()
@@ -15,8 +16,20 @@ export default function Login() {
   const manualSecret = mfa?.otpAuthUrl?.match(/secret=([^&]+)/)?.[1] ?? ''
 
   const finish = (user) => {
+    if (!user) return
+    if (user.roleCode === 'teacher') {
+      localStorage.removeItem('edtech_student_user')
+      window.location.replace(import.meta.env.VITE_TEACHER_PORTAL_URL || 'http://localhost:5174')
+      return
+    }
+    if (user.roleCode !== 'student') {
+      localStorage.removeItem('edtech_student_user')
+      window.location.replace(import.meta.env.VITE_ADMIN_PORTAL_URL || 'http://localhost:5173')
+      return
+    }
     login(user)
-    navigate(user?.roleCode === 'teacher' ? '/teacher' : '/')
+    playUiSound('success')
+    navigate('/', { replace: true })
   }
 
   async function submit(e) {
@@ -24,7 +37,7 @@ export default function Login() {
     setBusy(true)
     setError('')
     try {
-      const res = await api.post('/auth/login', form)
+      const res = await api.post('/auth/login', { ...form, portal: 'student' })
       if (res.requiresMfaSetup || res.requiresMfa) {
         setMfa({
           challenge: res.challenge,
@@ -36,6 +49,7 @@ export default function Login() {
       }
     } catch (err) {
       setError(err.message || 'Something went wrong')
+      playUiSound('error')
     } finally {
       setBusy(false)
     }
@@ -53,6 +67,7 @@ export default function Login() {
         ? ' If it keeps failing, delete the old EdTech Platform entry in your authenticator app and scan this new QR code.'
         : ''
       setError((err.message || 'Something went wrong') + hint)
+      playUiSound('error')
     } finally {
       setBusy(false)
     }
@@ -67,6 +82,7 @@ export default function Login() {
       finish(res.user)
     } catch (err) {
       setError(err.message || 'Something went wrong')
+      playUiSound('error')
     } finally {
       setBusy(false)
     }
@@ -76,7 +92,7 @@ export default function Login() {
     <div className="auth-wrap">
       <div className="card form-card">
         <h1>Sign in</h1>
-        <p className="page-sub">Student portal — EDTECH one-to-one tutoring</p>
+        <p className="page-sub">Student portal - EDTECH one-to-one tutoring</p>
 
         {error && <div className="alert error">{error}</div>}
 
@@ -113,7 +129,7 @@ export default function Login() {
               Remember me on this device
             </label>
             <button className="btn" disabled={busy}>
-              {busy ? 'Signing in…' : 'Sign in'}
+              {busy ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
         ) : (
@@ -162,7 +178,7 @@ export default function Login() {
               />
             </div>
             <button className="btn" disabled={busy}>
-              {busy ? 'Verifying…' : 'Verify & continue'}
+              {busy ? 'Verifying...' : 'Verify & continue'}
             </button>
           </form>
         )}

@@ -1,5 +1,5 @@
 import '../config.js';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../security/passwords.js';
 import { pool } from './pool.js';
 
 const modules = [
@@ -85,7 +85,7 @@ async function seed() {
        ON CONFLICT DO NOTHING`,
     );
 
-    const passwordHash = await bcrypt.hash(BOOTSTRAP_ADMIN_PASSWORD, 12);
+    const passwordHash = await hashPassword(BOOTSTRAP_ADMIN_PASSWORD, client);
     const { rows: userRows } = await client.query(
       `INSERT INTO users (role, name, email, password_hash)
        VALUES ('admin', $1, lower($2), $3)
@@ -102,8 +102,8 @@ async function seed() {
       [userRows[0].id, superAdminRows[0].id],
     );
 
-    const demoPassword = await bcrypt.hash('Student@12345', 12);
-    const teacherPassword = await bcrypt.hash('Teach@123456', 12);
+    const demoPassword = await hashPassword('Student@12345', client);
+    const teacherPassword = await hashPassword('Teach@123456', client);
     const { rows: studentRows } = await client.query(
       `INSERT INTO users (role, name, email, phone, password_hash)
        VALUES ('student', 'Demo Student', 'student@edtech.test', '+919000000001', $1)

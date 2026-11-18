@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../security/passwords.js';
 import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { writeAudit } from '../security/audit.js';
@@ -11,6 +11,7 @@ import { getWhatsAppMessageStatus, isAllowedTwilioTestRecipient, isTwilioSandbox
 import { ProviderError } from '../integrations/providerError.js';
 import { createTestZoomMeeting, isZoomTestConfigured } from '../integrations/zoom.js';
 import { createPdfReport, createXlsxReport, getAdminSummaryRows } from '../reports/adminSummaryReport.js';
+import { ensureSessionMeeting, loadMeetingChecks, sendSessionJoinDetails } from '../meetings/service.js';
 
 export const adminRouter = Router();
 
@@ -24,6 +25,7 @@ const personSchema = z.object({
   grade: z.string().trim().max(80).optional().nullable(),
   subjects: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
   hourlyRate: z.number().nonnegative().max(100000).optional().nullable(),
+  bio: z.string().trim().max(600).optional().nullable(),
 });
 const managedRecordSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -73,7 +75,7 @@ async function listPeople(req, res, role) {
   }
   const { rows } = await pool.query(
     `SELECT u.id, u.name, u.email, u.phone, u.status, u.created_at,
-            sp.age, sp.grade, tp.subjects, tp.hourly_rate, tp.approved
+            sp.age, sp.grade, tp.subjects, tp.hourly_rate, tp.approved, tp.bio
      FROM users u
      LEFT JOIN student_profiles sp ON sp.user_id = u.id
      LEFT JOIN teacher_profiles tp ON tp.user_id = u.id
@@ -93,7 +95,7 @@ async function createPerson(req, res, role) {
   try {
     await client.query('BEGIN');
     const data = input.data;
-    const hash = await bcrypt.hash(data.password, 12);
+    const hash = await hashPassword(data.password, client);
     const { rows } = await client.query(
       `INSERT INTO users (role, name, email, password_hash, phone)
        VALUES ($1, $2, lower($3), $4, $5) RETURNING id, name, email, phone, status, created_at`,
@@ -103,8 +105,8 @@ async function createPerson(req, res, role) {
       await client.query('INSERT INTO student_profiles (user_id, age, grade) VALUES ($1, $2, $3)', [rows[0].id, data.age ?? null, data.grade ?? null]);
     } else {
       await client.query(
-        'INSERT INTO teacher_profiles (user_id, subjects, hourly_rate) VALUES ($1, $2, $3)',
-        [rows[0].id, data.subjects ?? [], data.hourlyRate ?? null],
+        'INSERT INTO teacher_profiles (user_id, subjects, hourly_rate, bio) VALUES ($1, $2, $3, $4)',
+        [rows[0].id, data.subjects ?? [], data.hourlyRate ?? null, data.bio ?? null],
       );
     }
     await client.query('COMMIT');
@@ -131,6 +133,7 @@ async function updatePerson(req, res, role) {
     grade: z.string().trim().max(80).nullable().optional(),
     subjects: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
     hourlyRate: z.number().nonnegative().max(100000).nullable().optional(),
+    bio: z.string().trim().max(600).nullable().optional(),
   }).safeParse(req.body);
   if (!input.success) return validationError(res, input.error);
   if (!Object.keys(input.data).length) return res.status(400).json({ error: 'Provide at least one field to update.' });
@@ -160,13 +163,18 @@ async function updatePerson(req, res, role) {
         [id.data, Object.hasOwn(data, 'age'), data.age ?? null, Object.hasOwn(data, 'grade'), data.grade ?? null],
       );
     }
-    if (role === 'teacher' && (Object.hasOwn(data, 'subjects') || Object.hasOwn(data, 'hourlyRate'))) {
+    if (role === 'teacher' && (Object.hasOwn(data, 'subjects') || Object.hasOwn(data, 'hourlyRate') || Object.hasOwn(data, 'bio'))) {
       await client.query(
-        `INSERT INTO teacher_profiles (user_id, subjects, hourly_rate) VALUES ($1, $2, $3)
+        `INSERT INTO teacher_profiles (user_id, subjects, hourly_rate, bio) VALUES ($1, $2, $3, $6)
          ON CONFLICT (user_id) DO UPDATE SET
            subjects = CASE WHEN $4::boolean THEN $2::text[] ELSE teacher_profiles.subjects END,
-           hourly_rate = CASE WHEN $5::boolean THEN $3::numeric ELSE teacher_profiles.hourly_rate END`,
-        [id.data, data.subjects ?? [], data.hourlyRate ?? null, Object.hasOwn(data, 'subjects'), Object.hasOwn(data, 'hourlyRate')],
+           hourly_rate = CASE WHEN $5::boolean THEN $3::numeric ELSE teacher_profiles.hourly_rate END,
+           bio = CASE WHEN $7::boolean THEN $6::text ELSE teacher_profiles.bio END`,
+        [
+          id.data, data.subjects ?? [], data.hourlyRate ?? null,
+          Object.hasOwn(data, 'subjects'), Object.hasOwn(data, 'hourlyRate'),
+          data.bio ?? null, Object.hasOwn(data, 'bio'),
+        ],
       );
     }
     if (Object.hasOwn(data, 'status') || Object.hasOwn(data, 'email')) {
@@ -592,6 +600,66 @@ adminRouter.post('/live-classes/:id/test-meeting', requireAdmin, requirePermissi
   } catch (error) { return next(error); }
 });
 
+adminRouter.get('/meeting-checks', requireAdmin, requirePermission('live_classes', 'view'), async (req, res, next) => {
+  try {
+    return res.json(await loadMeetingChecks());
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post('/live-classes/:id/create-meeting', requireAdmin, requirePermission('live_classes', 'manage'), providerActionLimiter, async (req, res, next) => {
+  const sessionId = z.string().uuid().safeParse(req.params.id);
+  if (!sessionId.success) return validationError(res, sessionId.error);
+  try {
+    const result = await ensureSessionMeeting(sessionId.data);
+    const details = { status: result.status, missingKeys: result.missingKeys ?? [] };
+    await writeAudit(req, { event: 'class_meeting_created', module: 'live_classes', targetId: sessionId.data, details });
+    if (result.status === 'not_found') return res.status(404).json({ error: result.error });
+    if (result.status === 'not_configured') {
+      return res.status(503).json({ error: result.error, missingKeys: result.missingKeys ?? [] });
+    }
+    if (['unavailable', 'busy', 'creating'].includes(result.status)) {
+      return res.status(409).json({ error: result.error, status: result.status });
+    }
+    if (result.status === 'failed') {
+      return res.status(502).json({ error: result.error, status: result.status });
+    }
+    return res.json({
+      status: result.status,
+      joinUrl: result.session?.meeting_url ?? result.joinUrl ?? null,
+      session: result.session,
+    });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post('/live-classes/:id/send-join-details', requireAdmin, requirePermission('live_classes', 'manage'), providerActionLimiter, async (req, res, next) => {
+  const sessionId = z.string().uuid().safeParse(req.params.id);
+  if (!sessionId.success) return validationError(res, sessionId.error);
+  try {
+    const result = await sendSessionJoinDetails(sessionId.data);
+    const details = {
+      status: result.status,
+      delivery: result.delivery?.map((item) => ({
+        channel: item.channel, status: item.status, error: item.error ?? null,
+      })),
+    };
+    await writeAudit(req, { event: 'class_join_details_sent', module: 'live_classes', targetId: sessionId.data, details });
+    if (result.status === 'not_found') return res.status(404).json({ error: result.error });
+    if (result.status === 'not_configured') {
+      const missingKeys = [
+        ...(result.configuration?.email?.missingKeys ?? []),
+        ...(result.configuration?.whatsapp?.missingKeys ?? []),
+      ];
+      return res.status(503).json({ error: result.error, configuration: result.configuration, missingKeys });
+    }
+    if (result.status === 'meeting_missing') {
+      return res.status(409).json({
+        error: result.error, missingKeys: result.missingKeys ?? [], meetingStatus: result.meetingStatus,
+      });
+    }
+    return res.json(result);
+  } catch (error) { return next(error); }
+});
+
 adminRouter.get('/search', requireAdmin, async (req, res, next) => {
   try {
     const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
@@ -763,7 +831,7 @@ adminRouter.post('/admins', requireAdmin, requirePermission('admins', 'create'),
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Select a valid administrator role.' });
       }
-      const hash = await bcrypt.hash(input.data.password, 12);
+      const hash = await hashPassword(input.data.password, client);
       const { rows } = await client.query(
         `INSERT INTO users (role, name, email, password_hash) VALUES ('admin', $1, lower($2), $3)
          RETURNING id, name, email, status, created_at`,

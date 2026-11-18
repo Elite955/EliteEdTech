@@ -1,14 +1,14 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
-  Activity, BadgeDollarSign, BarChart3, Bell, Building2, CalendarDays, ChevronDown,
+  Activity, BadgeDollarSign, BarChart3, Bell, Building2, CalendarClock, CalendarDays, ChevronDown,
   ChevronLeft, ChevronRight, ClipboardList, CreditCard, Database, FileChartColumn, FileText,
-  GraduationCap, LayoutDashboard, LifeBuoy, LockKeyhole, LogOut, Menu, MessageSquareWarning, Search,
-  MonitorPlay, Settings2, Shield, ShieldCheck, UserCog, Users, WalletCards, X,
+  GraduationCap, LayoutDashboard, LifeBuoy, LockKeyhole, LogOut, MessageSquareWarning,
+  MonitorPlay, Settings2, Shield, UserCog, Users, WalletCards,
   type LucideIcon,
 } from 'lucide-react'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
-import { api, getErrorMessage } from '../lib/api'
+import { getErrorMessage } from '../lib/api'
 
 type NavItem = { label: string; path: string; module: string; icon: LucideIcon; superAdminOnly?: boolean }
 type NavGroup = { label: string; items: NavItem[] }
@@ -19,11 +19,11 @@ const navigation: NavGroup[] = [
     { label: 'Students', path: '/students', module: 'students', icon: GraduationCap },
     { label: 'Teachers', path: '/teachers', module: 'teachers', icon: Users },
     { label: 'Admin accounts', path: '/admins', module: 'admins', icon: UserCog },
-    { label: 'Roles & permissions', path: '/roles', module: 'roles', icon: ShieldCheck },
   ] },
   { label: 'Platform operations', items: [
     { label: 'Bookings', path: '/modules/bookings', module: 'bookings', icon: CalendarDays },
     { label: 'Live classes', path: '/modules/live_classes', module: 'live_classes', icon: MonitorPlay },
+    { label: 'Meeting checks', path: '/meeting-checks', module: 'live_classes', icon: CalendarClock },
     { label: 'Chat moderation', path: '/modules/chat_moderation', module: 'chat_moderation', icon: MessageSquareWarning },
     { label: 'Support & complaints', path: '/modules/support', module: 'support', icon: LifeBuoy },
   ] },
@@ -59,9 +59,9 @@ const pageTitles: Record<string, string> = {
   students: 'Students',
   teachers: 'Teachers',
   admins: 'Admin accounts',
-  roles: 'Roles & permissions',
   bookings: 'Bookings',
   live_classes: 'Live classes',
+  'meeting-checks': 'Meeting checks',
   chat_moderation: 'Chat moderation',
   support: 'Support & complaints',
   transactions: 'Transactions',
@@ -88,24 +88,9 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [apiStatus, setApiStatus] = useState<'checking' | 'connected' | 'unavailable'>('checking')
-  const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<Array<{ id: string; label: string; subtitle: string; module: string; path: string }>>([])
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState('')
   const currentPage = location.pathname.split('/').filter(Boolean).pop() ?? 'dashboard'
   const title = pageTitles[currentPage] ?? 'Dashboard'
-
-  useEffect(() => {
-    let active = true
-    api<{ status: string }>('/health')
-      .then(() => { if (active) setApiStatus('connected') })
-      .catch(() => { if (active) setApiStatus('unavailable') })
-    return () => { active = false }
-  }, [])
 
   async function handleLogout() {
     try {
@@ -116,38 +101,15 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
     }
   }
 
-  async function submitSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (search.trim().length < 2) {
-      setSearchError('Enter at least two characters to search.')
-      setSearchOpen(true)
-      return
-    }
-    setSearching(true)
-    setSearchError('')
-    setSearchOpen(true)
-    try {
-      const result = await api<{ items: typeof searchResults }>(`/admin/search?q=${encodeURIComponent(search.trim())}`)
-      setSearchResults(result.items)
-    } catch (error) {
-      setSearchError(getErrorMessage(error))
-      setSearchResults([])
-    } finally {
-      setSearching(false)
-    }
-  }
-
   return (
-    <div className={`admin-shell${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' mobile-nav-open' : ''}`}>
-      {mobileOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
-      <aside className="sidebar">
+    <div className={`admin-shell${collapsed ? ' is-collapsed' : ''}`}>
+      <aside className="sidebar" id="admin-sidebar">
         <div className="sidebar-brand">
           <div className="brand-logo"><span>e</span></div>
           {!collapsed && <div><strong>EdTech</strong><small>ADMIN CONSOLE</small></div>}
-          <button className="sidebar-collapse icon-button" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setCollapsed((value) => !value)}>
+          <button type="button" className="sidebar-collapse icon-button" aria-controls="admin-sidebar" aria-expanded={!collapsed} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
           </button>
-          <button className="mobile-close icon-button" aria-label="Close navigation" onClick={() => setMobileOpen(false)}><X size={19} /></button>
         </div>
         <nav className="sidebar-nav" aria-label="Admin navigation">
           {navigation.map((group) => {
@@ -157,7 +119,7 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
               <div className="nav-group" key={group.label}>
                 {!collapsed && <div className="nav-group-label">{group.label}</div>}
                 {items.map(({ label, path, icon: Icon }) => (
-                  <NavLink key={path} to={path} title={collapsed ? label : undefined} onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <NavLink key={path} to={path} title={label} aria-label={collapsed ? label : undefined} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
                     <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
                   </NavLink>
                 ))}
@@ -165,30 +127,14 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
             )
           })}
         </nav>
-        {!collapsed && (
-          <div className="sidebar-status">
-            <span className={`status-pulse${apiStatus === 'unavailable' ? ' status-offline' : ''}`} />
-            <div><strong>Admin systems</strong><small>{apiStatus === 'checking' ? 'Checking services…' : apiStatus === 'connected' ? 'API and database connected' : 'API or database unavailable'}</small></div>
-          </div>
-        )}
+
       </aside>
       <div className="main-column">
         <header className="topbar">
           <div className="topbar-heading">
-            <button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20} /></button>
-            <div><div className="breadcrumbs">EdTech Platform <span>/</span> Admin</div><h1>{title}</h1></div>
+            <h1>{title}</h1>
           </div>
           <div className="topbar-actions">
-            <form className="global-search" role="search" onSubmit={submitSearch}>
-              <Search size={16} />
-              <input aria-label="Search platform records" placeholder="Search platform…" value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setSearchOpen(false) }} onFocus={() => { if (searchResults.length || searchError) setSearchOpen(true) }} />
-              {searchOpen && <div className="search-dropdown">
-                {searchError ? <p role="alert">{searchError}</p> : searching ? <p>Searching authorized records…</p> : searchResults.length
-                  ? searchResults.map((item) => <Link key={`${item.module}-${item.id}`} to={item.path} onClick={() => setSearchOpen(false)}><strong>{item.label}</strong><small>{item.subtitle}</small></Link>)
-                  : <p>No matching records.</p>}
-              </div>}
-            </form>
-            <span className="environment-badge"><span /> {user?.role ?? 'Administrator'}</span>
             <div className="profile-wrap">
               <button className="profile-button" onClick={() => setProfileOpen((value) => !value)} aria-expanded={profileOpen}>
                 <span className="avatar">{user?.name.slice(0, 1).toUpperCase() ?? 'A'}</span>

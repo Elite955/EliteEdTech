@@ -203,6 +203,12 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS request_id UUID;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'booking_confirmation';
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_kind_check;
+ALTER TABLE notifications
+  ADD CONSTRAINT notifications_kind_check
+  CHECK (kind IN ('booking_confirmation', 'join_details', 'general'));
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_status_check;
 ALTER TABLE notifications
   ADD CONSTRAINT notifications_status_check
@@ -210,6 +216,9 @@ ALTER TABLE notifications
 
 CREATE UNIQUE INDEX IF NOT EXISTS notifications_request_id_idx
   ON notifications(request_id) WHERE request_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS notifications_booking_id_idx
+  ON notifications(booking_id) WHERE booking_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS managed_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

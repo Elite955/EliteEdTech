@@ -22,6 +22,14 @@ export function AuthProvider({ children }) {
         localStorage.setItem(USER_KEY, JSON.stringify(u))
         setUser(u)
       },
+      updateUser(patch) {
+        setUser((current) => {
+          if (!current) return current
+          const next = { ...current, ...patch }
+          localStorage.setItem(USER_KEY, JSON.stringify(next))
+          return next
+        })
+      },
       async logout() {
         try {
           await api.post('/auth/logout')

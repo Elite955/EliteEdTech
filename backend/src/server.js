@@ -12,6 +12,7 @@ import { adminRouter } from './routes/admin.js';
 import { studentRouter } from './routes/student.js';
 import { teacherRouter } from './routes/teacher.js';
 import { censorContent } from './security/profanity.js';
+import { PORTAL_COOKIES, normalizePortal, portalFromOrigin } from './security/portals.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must be set to a random value of at least 32 characters.');
@@ -19,14 +20,25 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 const app = express();
 const server = http.createServer(app);
-const origin = process.env.ADMIN_ORIGIN || 'http://localhost:5173';
+const allowedOrigins = [...new Set([
+  process.env.ADMIN_ORIGIN,
+  process.env.TEACHER_ORIGIN,
+  process.env.STUDENT_ORIGIN,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175',
+].filter(Boolean))];
+const corsOrigin = (requestOrigin, callback) => callback(null, !requestOrigin || allowedOrigins.includes(requestOrigin));
 const io = new SocketServer(server, {
-  cors: { origin, credentials: true },
+  cors: { origin: allowedOrigins, credentials: true },
 });
 
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
 app.use(helmet());
-app.use(cors({ origin, credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/payments/webhook', express.raw({ type: 'application/json', limit: '256kb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
@@ -60,28 +72,49 @@ function getCookie(cookieHeader, name) {
 
 io.use(async (socket, next) => {
   try {
-    const token = getCookie(socket.handshake.headers.cookie, 'edtech_session') ??
-      getCookie(socket.handshake.headers.cookie, 'admin_session');
+    const cookieHeader = socket.handshake.headers.cookie;
+    const hintedPortal = normalizePortal(socket.handshake.auth?.portal) ??
+      portalFromOrigin(socket.handshake.headers.origin);
+    let portal = hintedPortal;
+    let token = hintedPortal ? getCookie(cookieHeader, PORTAL_COOKIES[hintedPortal]) : null;
+
+    if (!hintedPortal) {
+      for (const candidate of ['admin', 'teacher', 'student']) {
+        const candidateToken = getCookie(cookieHeader, PORTAL_COOKIES[candidate]);
+        if (candidateToken) {
+          token = candidateToken;
+          portal = candidate;
+          break;
+        }
+      }
+      if (!token) token = getCookie(cookieHeader, 'edtech_session') ?? getCookie(cookieHeader, 'admin_session');
+    }
+
     if (!token) return next(new Error('Authentication required.'));
     const claims = jwt.verify(token, process.env.JWT_SECRET);
     if (claims.type !== 'session') return next(new Error('Authentication required.'));
 
-    const adminResult = await pool.query(
-      `SELECT u.id FROM admin_sessions s
-       JOIN users u ON u.id = s.user_id
-       JOIN admin_profiles ap ON ap.user_id = u.id
-       JOIN admin_roles r ON r.id = ap.role_id
-       JOIN role_permissions rp ON rp.role_id = r.id
-       JOIN permissions p ON p.id = rp.permission_id
-       WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL AND s.expires_at > now()
-         AND u.status = 'active' AND p.module = 'chat_moderation' AND p.action = 'view'`,
-      [claims.sid, claims.sub],
-    );
-    if (adminResult.rowCount) {
-      socket.data.kind = 'moderator';
-      socket.data.adminId = adminResult.rows[0].id;
-      return next();
+    if (portal === 'admin' || portal === null) {
+      const adminResult = await pool.query(
+        `SELECT u.id FROM admin_sessions s
+         JOIN users u ON u.id = s.user_id
+         JOIN admin_profiles ap ON ap.user_id = u.id
+         JOIN admin_roles r ON r.id = ap.role_id
+         JOIN role_permissions rp ON rp.role_id = r.id
+         JOIN permissions p ON p.id = rp.permission_id
+         WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL AND s.expires_at > now()
+           AND u.status = 'active' AND p.module = 'chat_moderation' AND p.action = 'view'`,
+        [claims.sid, claims.sub],
+      );
+      if (adminResult.rowCount) {
+        socket.data.kind = 'moderator';
+        socket.data.adminId = adminResult.rows[0].id;
+        return next();
+      }
+      if (portal === 'admin') return next(new Error('Chat access is not authorized.'));
     }
+
+    if (portal === 'teacher') return next(new Error('Chat access is not authorized.'));
 
     const studentResult = await pool.query(
       `SELECT u.id, u.name, u.status, u.role, sp.age
@@ -89,7 +122,7 @@ io.use(async (socket, next) => {
        JOIN users u ON u.id = s.user_id
        LEFT JOIN student_profiles sp ON sp.user_id = u.id
         WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL AND s.expires_at > now()
-          AND u.status = 'active' AND u.role IN ('student', 'teacher')`,
+          AND u.status = 'active' AND u.role = 'student'`,
       [claims.sid, claims.sub],
     );
     if (!studentResult.rowCount) return next(new Error('Chat access is not authorized.'));

@@ -8,7 +8,7 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  const headers = { 'Content-Type': 'application/json', 'X-Portal': 'student', ...(options.headers || {}) }
   let res
   try {
     res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })

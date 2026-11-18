@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import bcrypt from 'bcryptjs';
 import pg from 'pg';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -11,6 +10,7 @@ for (const line of fs.readFileSync(path.join(here, '..', '..', '.env'), 'utf8').
 }
 
 const { pool } = await import('../src/db/pool.js');
+const { hashPassword } = await import('../src/security/passwords.js');
 const { encryptField } = await import('../src/security/fieldEncryption.js');
 const { generateSecret, generateURI } = await import('otplib');
 
@@ -35,7 +35,7 @@ try {
     );
     console.log(`existing student account re-enrolled: ${email}`);
   } else {
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await hashPassword(password, client);
     const inserted = await client.query(
       `INSERT INTO users (role, name, email, password_hash) VALUES ('student', $1, lower($2), $3) RETURNING id`,
       [name, email, passwordHash],

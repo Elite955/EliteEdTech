@@ -1,19 +1,20 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { playUiSound } from '../lib/sound'
+
+const teacherPortalUrl =
+  import.meta.env.VITE_TEACHER_PORTAL_URL ||
+  `${window.location.protocol}//${window.location.hostname}:5174`
 
 export default function Register() {
-  const [role, setRole] = useState('student')
   const [form, setForm] = useState({
     name: '',
     email: '',
     phone: '',
     password: '',
     age: '',
-    grade: '',
-    hourly_rate: '',
-    subjects: '',
-    bio: ''
+    grade: ''
   })
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -26,30 +27,20 @@ export default function Register() {
     setBusy(true)
     setError('')
     try {
-      const base = {
-        role,
+      await api.post('/auth/register', {
+        role: 'student',
         name: form.name,
         email: form.email,
         phone: form.phone || undefined,
-        password: form.password
-      }
-      if (role === 'teacher') {
-        await api.post('/auth/register', {
-          ...base,
-          hourly_rate: Number(form.hourly_rate),
-          subjects: form.subjects.split(',').map((s) => s.trim()).filter(Boolean),
-          bio: form.bio || undefined
-        })
-      } else {
-        await api.post('/auth/register', {
-          ...base,
-          age: Number(form.age),
-          grade: form.grade || undefined
-        })
-      }
+        password: form.password,
+        age: Number(form.age),
+        grade: form.grade || undefined
+      })
       setDone(true)
+      playUiSound('success')
     } catch (err) {
       setError(err.message || 'Registration failed')
+      playUiSound('error')
     } finally {
       setBusy(false)
     }
@@ -58,8 +49,8 @@ export default function Register() {
   return (
     <div className="auth-wrap">
       <div className="card form-card">
-        <h1>Create account</h1>
-        <p className="page-sub">Register as a {role}</p>
+        <h1>Create student account</h1>
+        <p className="page-sub">Student portal - EDTECH one-to-one tutoring</p>
 
         {error && <div className="alert error">{error}</div>}
         {done && (
@@ -70,22 +61,6 @@ export default function Register() {
 
         {!done && (
           <form onSubmit={submit}>
-            <div className="field">
-              <label>I am a</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {['student', 'teacher'].map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    className={`chip ${role === r ? 'sel' : ''}`}
-                    style={{ cursor: 'pointer', textTransform: 'capitalize' }}
-                    onClick={() => setRole(r)}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="field">
               <label htmlFor="name">Full name</label>
               <input id="name" required value={form.name} onChange={set('name')} />
@@ -110,56 +85,26 @@ export default function Register() {
               />
               <p className="field-hint">At least 12 characters.</p>
             </div>
-
-            {role === 'student' ? (
-              <>
-                <div className="field">
-                  <label htmlFor="age">Age</label>
-                  <input id="age" type="number" min={5} max={100} required value={form.age} onChange={set('age')} />
-                </div>
-                <div className="field">
-                  <label htmlFor="grade">Class / grade</label>
-                  <input id="grade" value={form.grade} onChange={set('grade')} />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="field">
-                  <label htmlFor="hourly_rate">Hourly rate (₹ per hour)</label>
-                  <input
-                    id="hourly_rate"
-                    type="number"
-                    min={1}
-                    required
-                    value={form.hourly_rate}
-                    onChange={set('hourly_rate')}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="subjects">Subjects (comma-separated)</label>
-                  <input
-                    id="subjects"
-                    required
-                    placeholder="Mathematics, Science"
-                    value={form.subjects}
-                    onChange={set('subjects')}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="bio">Short bio (optional)</label>
-                  <input id="bio" value={form.bio} onChange={set('bio')} />
-                </div>
-              </>
-            )}
+            <div className="field">
+              <label htmlFor="age">Age</label>
+              <input id="age" type="number" min={5} max={100} required value={form.age} onChange={set('age')} />
+            </div>
+            <div className="field">
+              <label htmlFor="grade">Class / grade</label>
+              <input id="grade" value={form.grade} onChange={set('grade')} />
+            </div>
 
             <button className="btn" disabled={busy}>
-              {busy ? 'Creating…' : 'Register'}
+              {busy ? 'Creating...' : 'Register'}
             </button>
           </form>
         )}
 
         <p style={{ marginTop: 16, fontSize: 14 }}>
           Already registered? <Link className="link" to="/login">Sign in</Link>
+        </p>
+        <p style={{ marginTop: 8, fontSize: 14 }}>
+          Teaching with us? <a className="link" href={teacherPortalUrl}>Use the teacher portal</a> with the account your administrator created.
         </p>
       </div>
     </div>

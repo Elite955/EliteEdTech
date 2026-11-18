@@ -1,10 +1,12 @@
 export class ApiError extends Error {
   status: number
+  data: Record<string, unknown> | null
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, data: Record<string, unknown> | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.data = data
   }
 }
 
@@ -22,6 +24,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     ...options,
     credentials: 'include',
     headers: {
+      'X-Portal': 'admin',
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
     },
@@ -29,7 +32,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   if (response.status === 204) return undefined as T
 
-  const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null
+  const payload = await response.json().catch(() => null) as Record<string, unknown> | null
   if (!response.ok) {
     if (
       response.status === 401 &&
@@ -38,7 +41,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     ) {
       window.dispatchEvent(new Event('edtech:session-expired'))
     }
-    throw new ApiError(payload?.error ?? payload?.message ?? `Request failed (${response.status}).`, response.status)
+    const message = typeof payload?.error === 'string'
+      ? payload.error
+      : typeof payload?.message === 'string'
+        ? payload.message
+        : `Request failed (${response.status}).`
+    throw new ApiError(message, response.status, payload)
   }
   return payload as T
 }

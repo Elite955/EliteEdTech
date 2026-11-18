@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import StatusBadge from '../components/StatusBadge'
+import { playUiSound } from '../lib/sound'
 
 const EARNED = new Set(['approved', 'paid', 'completed'])
 
@@ -32,8 +33,10 @@ export default function TeacherDashboard() {
     try {
       const res = await api.patch(`/teacher/bookings/${id}`, { action })
       setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: res.booking.status } : b)))
+      playUiSound('success')
     } catch (e) {
       setErr(e.message)
+      playUiSound('error')
     } finally {
       setBusyId(null)
     }

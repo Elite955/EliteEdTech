@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { playUiSound } from '../lib/sound'
 import StatusBadge from '../components/StatusBadge'
+import CompletionEffect from '../components/CompletionEffect'
 
 function loadRazorpay() {
   return new Promise((resolve) => {
@@ -58,9 +60,11 @@ export default function MyBookings() {
               razorpay_signature: resp.razorpay_signature
             })
             setNote(`Payment successful — booking #${booking.id} is confirmed. See it under Sessions once scheduled.`)
+            playUiSound('success')
             load()
           } catch (e) {
             setErr(`Payment verification failed: ${e.message}`)
+            playUiSound('error')
             load()
           }
         }
@@ -68,6 +72,7 @@ export default function MyBookings() {
       rzp.open()
     } catch (e) {
       setErr(e.message)
+      playUiSound('error')
     } finally {
       setPayingId(null)
     }
@@ -91,6 +96,9 @@ export default function MyBookings() {
         <div className="slist">
           {bookings.map((b) => (
             <div key={b.id} className="card session-card">
+              {b.status === 'completed' && (
+                <CompletionEffect bookingId={b.id} detail={`Your session with ${b.teacher?.name || 'your teacher'} is complete.`} />
+              )}
               <div className="spread">
                 <div>
                   <strong>{b.teacher?.name || 'Teacher'}</strong> <StatusBadge status={b.status} />
