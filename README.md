@@ -25,11 +25,12 @@ Live-class and payment integrations must be selected by the team and use test/sa
 
 ```text
 EDtech-Repo/
-├── shared/       # Database schema, API contract, shared environment-variable reference
+├── shared/       # Database schema and API contract reference
 ├── backend/      # Authentication, security, database, payments, notifications
-├── admin/        # Admin dashboard
-├── teacher/      # Teacher dashboard
-├── student/      # Student dashboard
+├── home/         # Public marketing site
+├── admin/        # Admin console
+├── teacher/      # Teacher portal, including self-registration
+├── student/      # Student portal
 ├── docs/         # Architecture and project documentation
 └── README.md
 ```
@@ -54,7 +55,7 @@ Add folders as work begins; do not commit empty placeholders. See `TASKS.md` for
 
 ## Admin application (development)
 
-The web app uses **React + TypeScript + Vite**, **Node.js + Express**, and **PostgreSQL**. Students, teachers, and administrators use one shared sign-in page; successful sign-in routes each role to its own workspace. Admin accounts are created with the bootstrap seed, while student and teacher accounts are created by an administrator. There are no hard-coded demo credentials.
+The web app uses **React + TypeScript + Vite**, **Node.js + Express**, and **PostgreSQL**. Students and teachers register through their own portals, while administrator accounts are created with the bootstrap seed and in the admin console. Each role signs in to its own workspace. Demo seed credentials are documented for local development only.
 
 1. Install Node.js 22 or later and PostgreSQL. Create a local database named `edtech_admin`.
 2. From the repository root, run `Copy-Item .env.example .env`. Set `DATABASE_URL`, `BOOTSTRAP_ADMIN_PASSWORD` (at least 12 characters), and the bootstrap admin name and email. Generate random signing and encryption keys in PowerShell:
@@ -75,19 +76,29 @@ The web app uses **React + TypeScript + Vite**, **Node.js + Express**, and **Pos
    npm run dev
    ```
 
-4. In a second terminal, start the admin app:
+4. In additional terminals, start the public site and each portal:
 
    ```powershell
-   Set-Location admin
-   npm install
-   npm run dev
+   Set-Location home; npm install; npm run dev
+   Set-Location ..\teacher; npm install; npm run dev
+   Set-Location ..\student; npm install; npm run dev
+   Set-Location ..\admin; npm install; npm run dev
    ```
 
-   Open `http://localhost:5173`. Admins enroll an authenticator app on first sign-in and use its one-time code on later sign-ins. Student and teacher accounts use their own email/password and are routed to their role-specific placeholder pages.
+   Or run `.\start-dev.ps1` from the repository root to start all of them.
 
-The API listens on port `4000`, the admin app on `5173`, and Vite proxies `/api` and Socket.IO during development. The browser session uses an HttpOnly cookie; only one active session is retained per administrator. Password reset email requires configured SMTP. Provider readiness is shown in **Integrations**; credentials are read from server environment variables and are never shown in the UI.
+   Open the appropriate URL:
 
-The current implementation provides shared student/teacher/admin sign-in, admin MFA, password reset, session revocation, server-side role/permission checks, dashboard aggregates, student/teacher and admin-account management, role management, audit logging, global authorized search, CSV user exports, platform settings, and operational record views/status changes. Student and teacher accounts currently land on role-specific placeholder pages; their full learning and teaching workspaces are not implemented. A database is required for live records; empty states are not demo data.
+   | App | URL | Sign-in |
+   |---|---|---|
+   | Public site | `http://localhost:5170` | Links to the portals |
+   | Teacher portal | `http://localhost:5174` | Seed account `teacher1@edtech.test` / `Teach@123456`, or create an account at `/register` |
+   | Student portal | `http://localhost:5175` | Seed account `student@edtech.test` / `Student@12345`, or register at `/register` |
+   | Admin console | `http://localhost:5173` | Bootstrap admin from `.env`; enroll an authenticator app on first sign-in |
+
+The API listens on port `4000`. Vite proxies `/api` and Socket.IO during development. The browser session uses a role-specific HttpOnly cookie; only one active session is retained per administrator. Password reset email requires configured SMTP. Provider readiness is shown in **Integrations**; credentials are read from server environment variables and are never shown in the UI.
+
+The current implementation provides separate student, teacher, and admin portals with role-specific sign-in, teacher and student self-registration, admin MFA, password reset, session revocation, server-side role/permission checks, dashboard aggregates, user and admin-account management, booking and class workflows, in-portal meeting joins, audit logging, CSV user exports, platform settings, and operational record views/status changes. A migrated and seeded database is required for sign-in; empty states are not demo data.
 
 Administrator summary reports can be downloaded as PDF or XLSX and contain aggregate operational counts, not account-level personal data. Full Razorpay refunds are supported only for existing succeeded INR payments with a `rzp_test_` key and `RAZORPAY_TEST_MODE=true`; partial refunds, payment creation, and live credentials are not supported. Twilio WhatsApp test messages require `TWILIO_SANDBOX_MODE=true`, the Twilio sandbox sender, and an explicit E.164 `TWILIO_TEST_RECIPIENTS` allowlist. Zoom meeting creation requires `ZOOM_TEST_MODE=true` and a dedicated test account. All three actions are disabled unless `NODE_ENV` is `development` or `test`; configure test credentials only in the ignored `.env` file and do not enable these flags in production. Provider calls are not made by setup or tests.
 

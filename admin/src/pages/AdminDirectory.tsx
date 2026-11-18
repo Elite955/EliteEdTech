@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Plus, Shield, UserCog, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
+import { useSuccessBurst } from '../components/useSuccessBurst'
 import { api, getErrorMessage } from '../lib/api'
+import { playUiSound } from '../lib/sound'
 
 type AdminAccount = {
   id: string
@@ -19,6 +21,7 @@ type AdminRole = { code: string; name: string }
 
 export function AdminDirectory() {
   const { can, user } = useAuth()
+  const { celebrate, burst } = useSuccessBurst()
   const [items, setItems] = useState<AdminAccount[]>([])
   const [roles, setRoles] = useState<AdminRole[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,7 +29,7 @@ export function AdminDirectory() {
   const [notice, setNotice] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', password: '', roleCode: 'operations_admin' })
+  const [form, setForm] = useState({ name: '', email: '', password: '' })
 
   const fetchDirectory = useCallback((signal?: AbortSignal) => Promise.all([
     api<{ items: AdminAccount[] }>('/admin/admins', { signal }),
@@ -70,12 +73,16 @@ export function AdminDirectory() {
     setSaving(true)
     setError('')
     try {
-      await api('/admin/admins', { method: 'POST', body: JSON.stringify(form) })
-      setNotice('Administrator account created. They will be asked to enroll MFA at first sign-in.')
-      setForm({ name: '', email: '', password: '', roleCode: 'operations_admin' })
+      await api('/admin/admins', {
+        method: 'POST',
+        body: JSON.stringify({ ...form, roleCode: 'operations_admin' }),
+      })
+      setNotice('Administrator account created with the Operations Admin role. They will be asked to enroll MFA at first sign-in.')
+      celebrate('Administrator created')
+      setForm({ name: '', email: '', password: '' })
       setDialogOpen(false)
       await load()
-    } catch (requestError) { setError(getErrorMessage(requestError)) }
+    } catch (requestError) { playUiSound('error'); setError(getErrorMessage(requestError)) }
     finally { setSaving(false) }
   }
 
@@ -86,8 +93,9 @@ export function AdminDirectory() {
     try {
       await api(`/admin/admins/${admin.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
       setNotice(`${admin.name} is now ${status}. Active sessions are revoked when access is suspended.`)
+      celebrate('Access updated', `${admin.name} is now ${status}.`)
       await load()
-    } catch (requestError) { setError(getErrorMessage(requestError)) }
+    } catch (requestError) { playUiSound('error'); setError(getErrorMessage(requestError)) }
   }
 
   async function changeRole(admin: AdminAccount, roleCode: string) {
@@ -96,8 +104,9 @@ export function AdminDirectory() {
     try {
       await api(`/admin/admins/${admin.id}`, { method: 'PATCH', body: JSON.stringify({ roleCode }) })
       setNotice(`${admin.name} now has the ${roles.find((role) => role.code === roleCode)?.name ?? roleCode} role.`)
+      celebrate('Role updated')
       await load()
-    } catch (requestError) { setError(getErrorMessage(requestError)) }
+    } catch (requestError) { playUiSound('error'); setError(getErrorMessage(requestError)) }
   }
 
   async function revokeSessions(admin: AdminAccount) {
@@ -106,12 +115,14 @@ export function AdminDirectory() {
     try {
       const result = await api<{ message: string }>(`/admin/admins/${admin.id}/revoke-sessions`, { method: 'POST' })
       setNotice(result.message)
+      celebrate('Sessions revoked')
       await load()
-    } catch (requestError) { setError(getErrorMessage(requestError)) }
+    } catch (requestError) { playUiSound('error'); setError(getErrorMessage(requestError)) }
   }
 
   return (
     <div className="directory-page">
+      {burst}
       <div className="page-intro">
         <div><p className="eyebrow">USER MANAGEMENT</p><h2>Admin accounts</h2><p>Delegate platform responsibilities and revoke access when required.</p></div>
         {user?.roleCode === 'super_admin' && can('admins', 'create') && <button className="primary-button" onClick={() => setDialogOpen(true)}><Plus size={17} /> Add administrator</button>}
@@ -151,7 +162,7 @@ export function AdminDirectory() {
               <label>Full name<input required maxLength={120} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
               <label>Work email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
               <label>Temporary password<input required type="password" minLength={12} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /><small>At least 12 characters. Share through an approved secure channel.</small></label>
-              <label>Administrative role<select value={form.roleCode} onChange={(event) => setForm({ ...form, roleCode: event.target.value })}>{roles.filter((role) => role.code !== 'super_admin').map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}</select></label>
+              <p className="dialog-hint">New administrators receive the Operations Admin role. Their role can be changed later from the account list.</p>
               {error && <div role="alert" className="form-error">{error}</div>}
               <div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => setDialogOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'Creating…' : 'Create administrator'}</button></div>
             </form>
