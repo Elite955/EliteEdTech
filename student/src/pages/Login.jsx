@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { Icon } from '../components/icons'
 import { playUiSound } from '../lib/sound'
 
 export default function Login() {
@@ -91,8 +92,14 @@ export default function Login() {
   return (
     <div className="auth-wrap">
       <div className="card form-card">
-        <h1>Sign in</h1>
-        <p className="page-sub">Student portal - EDTECH one-to-one tutoring</p>
+        <div className="auth-brand">
+          <span className="auth-mark" aria-hidden="true"><Icon name="cap" size={26} /></span>
+          <span className="auth-brand-name">EDTECH <small>student portal</small></span>
+        </div>
+        <h1>{mfa ? (mfa.setup ? 'Set up your authenticator' : 'Verify it’s you') : 'Welcome back'}</h1>
+        <p className="page-sub">
+          {mfa ? 'Enter the six-digit code from your authenticator app.' : 'Sign in to continue your one-to-one lessons.'}
+        </p>
 
         {error && <div className="alert error">{error}</div>}
 

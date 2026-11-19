@@ -76,12 +76,12 @@ export function DashboardPage() {
   }
 
   const statCards = [
-    { label: 'Pending Requests', value: stats?.pendingBookings ?? 0, icon: ClipboardList, color: 'text-amber-600 bg-amber-50' },
+    { label: 'Pending Requests', value: stats?.pendingBookings ?? 0, icon: ClipboardList, color: 'text-blue-600 bg-blue-50' },
     { label: 'Upcoming Sessions', value: stats?.upcomingSessions ?? 0, icon: Calendar, color: 'text-blue-600 bg-blue-50' },
-    { label: 'Completed Classes', value: stats?.completedSessions ?? 0, icon: Video, color: 'text-green-600 bg-green-50' },
-    { label: 'Total Earnings', value: `₹${(stats?.totalEarnings ?? 0).toLocaleString('en-IN')}`, icon: DollarSign, color: 'text-emerald-600 bg-emerald-50' },
-    { label: 'Total Bookings', value: stats?.totalBookings ?? 0, icon: Users, color: 'text-indigo-600 bg-indigo-50' },
-    { label: 'Avg. Rating', value: stats?.averageRating ? stats.averageRating.toFixed(1) : '—', icon: Star, color: 'text-yellow-600 bg-yellow-50' },
+    { label: 'Completed Classes', value: stats?.completedSessions ?? 0, icon: Video, color: 'text-blue-600 bg-blue-50' },
+    { label: 'Total Earnings', value: `₹${(stats?.totalEarnings ?? 0).toLocaleString('en-IN')}`, icon: DollarSign, color: 'text-blue-600 bg-blue-50' },
+    { label: 'Total Bookings', value: stats?.totalBookings ?? 0, icon: Users, color: 'text-blue-600 bg-blue-50' },
+    { label: 'Avg. Rating', value: stats?.averageRating ? stats.averageRating.toFixed(1) : '—', icon: Star, color: 'text-blue-600 bg-blue-50' },
   ]
 
   return (
@@ -115,7 +115,7 @@ export function DashboardPage() {
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-            <ClipboardList size={18} className="text-amber-500" />
+            <ClipboardList size={18} className="text-blue-500" />
             Pending Requests
           </h3>
           <Link to="/bookings" className="text-sm text-blue-600 hover:text-blue-700 font-medium">

@@ -27,16 +27,16 @@
   --accent: oklch(55% 0.17 255);
   --accent-ink: oklch(39% 0.15 255);
   --accent-soft: oklch(94% 0.04 255);
-  --coral: oklch(72% 0.16 28);
-  --mint: oklch(78% 0.12 160);
-  --gold: oklch(84% 0.13 82);
-  --lilac: oklch(80% 0.09 300);
+  --coral: oklch(64% 0.16 255);
+  --mint: oklch(70% 0.13 255);
+  --gold: oklch(78% 0.11 255);
+  --lilac: oklch(72% 0.1 255);
 
   --bad: oklch(55% 0.19 25);
   --good: oklch(52% 0.13 160);
   --info: oklch(52% 0.15 255);
   --warn: oklch(62% 0.14 70);
-  --star: oklch(78% 0.14 82);
+  --star: oklch(74% 0.13 255);
 
   --shadow-1: 0 1px 2px oklch(23% 0.045 250 / 0.06), 0 0 0 1px oklch(23% 0.045 250 / 0.06);
   --shadow-2: 0 1px 2px oklch(23% 0.045 250 / 0.05), 0 20px 44px -24px oklch(23% 0.045 250 / 0.3), 0 0 0 1px oklch(23% 0.045 250 / 0.06);
@@ -1910,4 +1910,467 @@ th,
   .join-dialog-backdrop,
   .join-dialog,
   .join-dialog-spinner { animation: none; }
+}
+
+/* ============================================================
+   Polish layer v2 — ambient motion & micro-interactions
+   ============================================================ */
+
+@keyframes ui-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ui-pop-in {
+  0%   { opacity: 0; transform: scale(0.92); }
+  60%  { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ui-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(26px, -20px) scale(1.1); }
+}
+
+@keyframes ui-sheen {
+  0%   { transform: translateX(-160%) skewX(-18deg); opacity: 0; }
+  20%  { opacity: 0.7; }
+  100% { transform: translateX(340%) skewX(-18deg); opacity: 0; }
+}
+
+@keyframes ui-slide-bg {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+
+@keyframes ui-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+@keyframes ui-ring {
+  0%   { transform: scale(1); opacity: 0.45; }
+  70%  { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+/* Auth screens: drifting light behind the form */
+.auth-wrap {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.auth-wrap::before,
+.auth-wrap::after {
+  content: "";
+  position: absolute;
+  width: 460px;
+  height: 460px;
+  border-radius: 50%;
+  filter: blur(10px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.auth-wrap::before {
+  top: -180px;
+  right: -120px;
+  background: radial-gradient(circle, color-mix(in oklab, var(--accent) 20%, transparent), transparent 68%);
+  animation: ui-drift 18s ease-in-out infinite alternate;
+}
+
+.auth-wrap::after {
+  bottom: -200px;
+  left: -140px;
+  background: radial-gradient(circle, color-mix(in oklab, var(--mint) 22%, transparent), transparent 68%);
+  animation: ui-drift 22s ease-in-out infinite alternate-reverse;
+}
+
+.auth-wrap .form-card {
+  position: relative;
+  z-index: 1;
+  animation: ui-fade-up 480ms var(--ease-out, ease-out) both;
+}
+
+/* Topbar hairline */
+.topbar {
+  position: relative;
+}
+
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 42%, transparent), transparent);
+  background-size: 200% 100%;
+  animation: ui-slide-bg 9s linear infinite;
+  pointer-events: none;
+}
+
+/* Navigation */
+.nav-link svg {
+  transition: transform 200ms ease;
+}
+
+.nav-link:hover svg {
+  transform: scale(1.1) translateX(1px);
+}
+
+/* Cards */
+.card {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.cards .card:hover,
+.teacher-card:hover,
+.session-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in oklab, var(--accent) 26%, var(--line));
+}
+
+/* Login/register cards should stay put */
+.card.form-card:hover,
+.card.empty:hover {
+  transform: none;
+  box-shadow: var(--shadow-1);
+  border-color: var(--line);
+}
+
+.teacher-avatar {
+  transition: transform 240ms var(--ease-out, ease-out);
+}
+
+.teacher-card:hover .teacher-avatar {
+  transform: scale(1.07) rotate(-4deg);
+}
+
+.cards .stat .num {
+  animation: ui-pop-in 460ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Buttons */
+.btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    background 160ms,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.btn:not(.ghost)::after {
+  content: "";
+  position: absolute;
+  top: -40%;
+  bottom: -40%;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  transform: translateX(-160%) skewX(-18deg);
+  pointer-events: none;
+}
+
+.btn:not(.ghost):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 20px -14px color-mix(in oklab, var(--ink) 70%, transparent);
+}
+
+.btn:not(.ghost):hover::after {
+  animation: ui-sheen 720ms ease;
+}
+
+.btn.ghost:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+/* Form controls */
+input,
+select,
+textarea {
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.teacher-search-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+/* Tables */
+tbody tr {
+  transition: background 150ms ease, box-shadow 150ms ease;
+}
+
+tbody tr:hover td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Feedback messages */
+.alert {
+  animation: ui-fade-up 260ms ease both;
+}
+
+/* Chat launcher: quiet attention ring */
+.chat-launcher::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid color-mix(in oklab, var(--accent) 55%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  animation: ui-ring 3.4s ease-out infinite;
+}
+
+/* Loaders */
+.page-loader-lines span {
+  background: linear-gradient(90deg, var(--paper-3) 25%, var(--surface) 50%, var(--paper-3) 75%);
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.35s linear infinite;
+}
+
+.page-loader-lines span:nth-child(2) { animation-delay: -0.35s; }
+.page-loader-lines span:nth-child(3) { animation-delay: -0.7s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-wrap::before,
+  .auth-wrap::after,
+  .auth-wrap .form-card,
+  .topbar::after,
+  .cards .stat .num,
+  .alert,
+  .chat-launcher::after,
+  .page-loader-lines span {
+    animation: none;
+  }
+
+  .cards .card:hover,
+  .teacher-card:hover,
+  .session-card:hover,
+  .teacher-card:hover .teacher-avatar,
+  .btn:hover,
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Unify focus on form controls (soft accent ring instead of double outline) */
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible,
+.teacher-search-field input:focus-visible {
+  outline: none;
+}
+
+/* Payment options under the Pay button */
+.pay-options {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.pay-options small {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   Polish layer v3 — shared auth identity, page icons,
+   sliding navigation and gentler hover motion
+   ============================================================ */
+
+/* Auth: same paper, indigo mark and type as the other portals */
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.auth-mark {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(145deg, var(--accent), var(--accent-ink));
+  box-shadow: 0 12px 24px -14px color-mix(in oklab, var(--accent) 75%, transparent);
+  transition: transform 220ms var(--ease-out, ease), box-shadow 220ms ease;
+}
+
+.auth-brand:hover .auth-mark {
+  transform: translateY(-2px) rotate(-5deg);
+  box-shadow: 0 16px 28px -14px color-mix(in oklab, var(--accent) 85%, transparent);
+}
+
+.auth-brand-name {
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.auth-brand-name small {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+}
+
+.card.form-card {
+  width: 100%;
+  max-width: 430px;
+  padding: 30px 30px 26px;
+  border-radius: 18px;
+}
+
+.card.form-card h1 {
+  margin-bottom: 4px;
+  font-family: var(--font-display);
+  font-size: 1.62rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.card.form-card .page-sub {
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.card.form-card .btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* Page title icon in the topbar (re-pops on each route change) */
+.topbar-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in oklab, var(--accent) 16%, transparent);
+  animation: ui-icon-pop 340ms var(--ease-out, ease);
+}
+
+@keyframes ui-icon-pop {
+  from { opacity: 0; transform: translateY(5px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Sidebar: sliding accent rail + label nudge */
+.nav-link {
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  opacity: 0;
+  transform: translateY(-50%) scaleY(0.15);
+  transition: opacity 180ms ease, transform 240ms var(--ease-out, ease);
+}
+
+.nav-link:hover::before,
+.nav-link.active::before {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+
+.nav-link span {
+  transition: transform 220ms var(--ease-out, ease);
+}
+
+.nav-link:hover span {
+  transform: translateX(3px);
+}
+
+/* Tables: rows glide slightly and pick up the accent edge */
+table tbody tr {
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+table tbody tr:hover {
+  transform: translateX(2px);
+  background: color-mix(in oklab, var(--accent) 5%, transparent);
+}
+
+/* Alerts slide in */
+.alert {
+  animation: ui-slide-in 260ms var(--ease-out, ease) both;
+}
+
+@keyframes ui-slide-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-icon,
+  .alert {
+    animation: none;
+  }
+
+  .auth-mark,
+  .nav-link::before,
+  .nav-link span,
+  table tbody tr {
+    transition: none;
+  }
+
+  .auth-brand:hover .auth-mark,
+  .nav-link:hover span,
+  table tbody tr:hover {
+    transform: none;
+  }
+}
+
+/* Auth card matches the white surface used by the teacher/admin sign-in */
+.card.form-card {
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.card.form-card h1::after {
+  display: none;
+}
+
+/* Second ambience light: coral, same as the teacher + admin pages */
+.auth-wrap::after {
+  background: radial-gradient(circle, color-mix(in oklab, var(--coral) 24%, transparent), transparent 68%);
 }

@@ -59,17 +59,17 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+    <div className="auth-page min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
-            <GraduationCap size={32} className="text-white" />
+        <div className="auth-card bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          <div className="auth-brand">
+            <span className="auth-mark"><GraduationCap size={26} /></span>
+            <span className="auth-brand-name">EDTECH <small>teacher portal</small></span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Teacher Dashboard</h1>
-          <p className="text-slate-500 mt-1">Sign in to manage your classes</p>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          <h1 className="auth-title">{mfaChallenge ? 'Verify it’s you' : 'Welcome back'}</h1>
+          <p className="auth-sub">
+            {mfaChallenge ? 'Enter the six-digit code from your authenticator app.' : 'Sign in to manage your classes.'}
+          </p>
           {params.get('registered') === '1' && (
             <div className="bg-green-50 text-green-800 text-sm px-4 py-3 rounded-lg border border-green-200 mb-5">
               Your teacher account was created. Sign in to continue.
@@ -124,10 +124,6 @@ export function LoginPage() {
             </form>
           ) : (
             <form onSubmit={handleMfa} className="space-y-5">
-              <div className="text-center">
-                <h2 className="text-lg font-semibold text-slate-900">Two-Factor Authentication</h2>
-                <p className="text-sm text-slate-500 mt-1">Enter the 6-digit code from your authenticator app</p>
-              </div>
               <div>
                 <input
                   type="text"

@@ -51,6 +51,9 @@ export function TeacherLayout() {
   const profileButtonRef = useRef<HTMLButtonElement>(null)
   const [pendingBookings, setPendingBookings] = useState(0)
   const initial = user?.name?.charAt(0).toUpperCase() ?? 'T'
+  const allNavItems = navigation.flatMap((group) => group.items)
+  const activeNav = allNavItems.find((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)) ?? allNavItems[0]
+  const PageIcon = activeNav.icon
 
   useEffect(() => {
     setProfileOpen(false)
@@ -135,7 +138,8 @@ export function TeacherLayout() {
       <div className="main-column">
         <header className="topbar">
           <div className="topbar-heading">
-            <h1>Teacher portal</h1>
+            <span className="topbar-icon" key={location.pathname} aria-hidden="true"><PageIcon size={17} strokeWidth={1.9} /></span>
+            <h1>{activeNav.label}</h1>
           </div>
           <div className="topbar-actions">
             <div className="profile-wrap">

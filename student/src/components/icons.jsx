@@ -1,5 +1,6 @@
 const paths = {
   dashboard: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+  cap: 'M22 10L12 5 2 10l10 5 10-5ZM6 12v4c0 1.7 2.7 3 6 3s6-1.3 6-3v-4M22 10v6',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM16 16l5 5',
   calendar: 'M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z',
   card: 'M2 6h20v12H2zM2 10h20',

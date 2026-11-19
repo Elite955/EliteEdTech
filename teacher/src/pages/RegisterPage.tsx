@@ -53,23 +53,20 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+    <div className="auth-page min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
       <div className="w-full max-w-xl">
         <Link to="/sign-in" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 mb-6">
           <ArrowLeft size={16} />
           Back to sign in
         </Link>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-14 h-14 flex items-center justify-center bg-blue-600 rounded-2xl">
-              <GraduationCap size={28} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">Create your teacher account</h1>
-              <p className="text-slate-500 mt-1">Teach one-to-one classes on your own schedule.</p>
-            </div>
+        <div className="auth-card bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          <div className="auth-brand">
+            <span className="auth-mark"><GraduationCap size={26} /></span>
+            <span className="auth-brand-name">EDTECH <small>teacher portal</small></span>
           </div>
+          <h1 className="auth-title">Create your account</h1>
+          <p className="auth-sub">Teach one-to-one classes on your own schedule.</p>
 
           {done ? (
             <div className="space-y-5">

@@ -35,11 +35,11 @@ export function FeedbackPage() {
           <p className="text-slate-500 mt-1">See what your students are saying about your classes.</p>
         </div>
         {averageRating && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-3 flex items-center gap-3">
-            <Star size={24} className="text-yellow-500 fill-yellow-400" />
+          <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 flex items-center gap-3">
+            <Star size={24} className="text-blue-500 fill-blue-400" />
             <div>
-              <p className="text-2xl font-bold text-yellow-700">{averageRating}</p>
-              <p className="text-xs text-yellow-600">{feedbacks.length} review{feedbacks.length !== 1 ? 's' : ''}</p>
+              <p className="text-2xl font-bold text-blue-700">{averageRating}</p>
+              <p className="text-xs text-blue-600">{feedbacks.length} review{feedbacks.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
         )}
@@ -83,7 +83,7 @@ export function FeedbackPage() {
                     <Star
                       key={i}
                       size={16}
-                      className={i < f.rating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}
+                      className={i < f.rating ? 'text-blue-400 fill-blue-400' : 'text-slate-200'}
                     />
                   ))}
                 </div>

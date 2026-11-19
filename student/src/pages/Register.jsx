@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { Icon } from '../components/icons'
 import { playUiSound } from '../lib/sound'
 
 const teacherPortalUrl =
@@ -49,8 +50,12 @@ export default function Register() {
   return (
     <div className="auth-wrap">
       <div className="card form-card">
-        <h1>Create student account</h1>
-        <p className="page-sub">Student portal - EDTECH one-to-one tutoring</p>
+        <div className="auth-brand">
+          <span className="auth-mark" aria-hidden="true"><Icon name="cap" size={26} /></span>
+          <span className="auth-brand-name">EDTECH <small>student portal</small></span>
+        </div>
+        <h1>Create your account</h1>
+        <p className="page-sub">Join EDTECH and book your first one-to-one lesson.</p>
 
         {error && <div className="alert error">{error}</div>}
         {done && (
