@@ -38,6 +38,19 @@ export default function Layout() {
   const profileButtonRef = useRef(null)
   const [chatOpen, setChatOpen] = useState(false)
   const initial = user?.name?.charAt(0).toUpperCase() ?? 'S'
+  const extraRoutes = [
+    { match: '/request', label: 'Request a slot', icon: 'calendar' },
+    { match: '/teacher', label: 'Teacher profile', icon: 'profile' }
+  ]
+  const navItem = navigation
+    .flatMap((group) => group.items)
+    .find((item) => (item.end ? location.pathname === item.to : location.pathname.startsWith(item.to)))
+  const pageMeta =
+    navItem ??
+    extraRoutes.find((route) => location.pathname.startsWith(route.match)) ?? {
+      label: 'Dashboard',
+      icon: 'dashboard'
+    }
 
   useEffect(() => {
     setProfileOpen(false)
@@ -97,7 +110,8 @@ export default function Layout() {
       <div className="main-column">
         <header className="topbar">
           <div className="topbar-heading">
-            <div className="topbar-title">Student portal</div>
+            <span className="topbar-icon" key={pageMeta.label} aria-hidden="true"><Icon name={pageMeta.icon} size={18} /></span>
+            <div className="topbar-title">{pageMeta.label}</div>
           </div>
           <div className="topbar-actions">
             <div className="profile-wrap">

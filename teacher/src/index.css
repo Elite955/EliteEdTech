@@ -13,26 +13,26 @@
 
   --color-white: #fff;
 
-  --color-slate-50: oklch(97.2% 0.005 82);
-  --color-slate-100: oklch(95.2% 0.006 81);
-  --color-slate-200: oklch(90% 0.006 82);
-  --color-slate-300: oklch(84% 0.008 80);
-  --color-slate-400: oklch(66% 0.012 78);
-  --color-slate-500: oklch(48% 0.012 78);
-  --color-slate-600: oklch(38% 0.011 74);
-  --color-slate-700: oklch(27% 0.01 72);
-  --color-slate-800: oklch(21% 0.009 71);
-  --color-slate-900: oklch(15% 0.008 70);
+  --color-slate-50: oklch(97.2% 0.008 250);
+  --color-slate-100: oklch(95.2% 0.01 250);
+  --color-slate-200: oklch(90% 0.012 250);
+  --color-slate-300: oklch(84% 0.014 250);
+  --color-slate-400: oklch(66% 0.02 250);
+  --color-slate-500: oklch(50% 0.025 250);
+  --color-slate-600: oklch(40% 0.03 250);
+  --color-slate-700: oklch(32% 0.035 250);
+  --color-slate-800: oklch(24% 0.04 250);
+  --color-slate-900: oklch(18% 0.045 250);
 
-  --color-blue-50: oklch(95.5% 0.02 48);
-  --color-blue-100: oklch(91.5% 0.035 46);
-  --color-blue-200: oklch(85% 0.06 45);
-  --color-blue-500: oklch(67% 0.213 38);
-  --color-blue-600: oklch(60% 0.2 39);
-  --color-blue-700: oklch(47% 0.16 40);
-  --color-blue-800: oklch(38% 0.13 40);
+  --color-blue-50: oklch(96% 0.02 255);
+  --color-blue-100: oklch(92% 0.035 255);
+  --color-blue-200: oklch(86% 0.06 255);
+  --color-blue-500: oklch(58% 0.17 255);
+  --color-blue-600: oklch(55% 0.17 255);
+  --color-blue-700: oklch(45% 0.16 255);
+  --color-blue-800: oklch(37% 0.14 255);
 
-  --color-indigo-50: oklch(95.5% 0.012 75);
+  --color-indigo-50: oklch(96% 0.02 258);
 
   --color-green-50: oklch(95.5% 0.03 160);
   --color-green-200: oklch(88% 0.06 160);
@@ -67,18 +67,18 @@ body {
 
 body {
   font-family: var(--font-sans);
-  background: oklch(98.5% 0.004 85);
-  color: oklch(15% 0.008 70);
+  background: oklch(97.8% 0.008 78);
+  color: oklch(18% 0.045 250);
   -webkit-font-smoothing: antialiased;
   font-synthesis: none;
 }
 
 ::selection {
-  background: color-mix(in oklab, oklch(67% 0.213 38), transparent 80%);
+  background: color-mix(in oklab, oklch(58% 0.17 255), transparent 80%);
 }
 
 :focus-visible {
-  outline: 2px solid oklch(67% 0.213 38);
+  outline: 2px solid oklch(58% 0.17 255);
   outline-offset: 3px;
 }
 
@@ -100,16 +100,16 @@ h3 {
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: oklch(84% 0.008 80); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: oklch(66% 0.012 78); }
+::-webkit-scrollbar-thumb { background: oklch(84% 0.014 250); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: oklch(66% 0.02 250); }
 
 /* Loading spinner */
 .spinner {
   display: inline-block;
   width: 1.25rem;
   height: 1.25rem;
-  border: 2px solid oklch(90% 0.006 82);
-  border-top-color: oklch(47% 0.16 40);
+  border: 2px solid oklch(90% 0.012 250);
+  border-top-color: oklch(45% 0.16 255);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -127,14 +127,14 @@ h3 {
 
 .page-loader.is-fullscreen {
   min-height: 100vh;
-  background: oklch(98.5% 0.004 85);
+  background: oklch(97.8% 0.008 78);
 }
 
 .page-loader-panel {
   width: min(420px, 100%);
   padding: 22px;
   background: var(--color-white);
-  border: 1px solid oklch(90% 0.006 82);
+  border: 1px solid oklch(90% 0.012 250);
   border-radius: 16px;
   box-shadow: 0 18px 40px -30px oklch(15% 0.008 70 / 0.4);
 }
@@ -151,7 +151,7 @@ h3 {
 
 .page-loader-head strong {
   display: block;
-  color: oklch(15% 0.008 70);
+  color: oklch(18% 0.045 250);
   font-family: var(--font-display);
   font-size: 1.05rem;
   letter-spacing: 0.02em;
@@ -161,7 +161,7 @@ h3 {
 .page-loader-head small {
   display: block;
   margin-top: 3px;
-  color: oklch(48% 0.012 78);
+  color: oklch(50% 0.025 250);
   font-size: 0.78rem;
 }
 
@@ -169,8 +169,8 @@ h3 {
   width: 30px;
   height: 30px;
   flex: 0 0 30px;
-  border: 2px solid oklch(90% 0.006 82);
-  border-top-color: oklch(60% 0.2 39);
+  border: 2px solid oklch(90% 0.012 250);
+  border-top-color: oklch(55% 0.17 255);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -183,7 +183,7 @@ h3 {
 
 .page-loader-lines span {
   height: 8px;
-  background: oklch(95.2% 0.006 81);
+  background: oklch(95.2% 0.01 250);
   border-radius: 6px;
   animation: loader-breathe 1.4s ease-in-out infinite;
 }
@@ -217,16 +217,16 @@ h3 {
   width: 8px;
   height: 14px;
   border-radius: 2px;
-  background: oklch(60% 0.2 39);
+  background: oklch(55% 0.17 255);
   opacity: 0;
   animation-name: approval-fall;
   animation-timing-function: ease-in;
   animation-fill-mode: forwards;
 }
 
-.approval-confetti span:nth-child(3n) { background: oklch(40% 0.11 160); }
-.approval-confetti span:nth-child(3n + 2) { background: oklch(47% 0.16 40); }
-.approval-confetti span:nth-child(4n) { background: oklch(66% 0.14 80); }
+.approval-confetti span:nth-child(3n) { background: oklch(66% 0.12 255); }
+.approval-confetti span:nth-child(3n + 2) { background: oklch(45% 0.16 255); }
+.approval-confetti span:nth-child(4n) { background: oklch(74% 0.09 255); }
 
 .approval-toast {
   position: absolute;
@@ -239,7 +239,7 @@ h3 {
   gap: 12px;
   padding: 13px 16px;
   background: var(--color-white);
-  border: 1px solid oklch(90% 0.006 82);
+  border: 1px solid oklch(90% 0.012 250);
   border-radius: 14px;
   box-shadow: 0 22px 55px -28px oklch(15% 0.008 70 / 0.5);
   transform: translateX(-50%);
@@ -248,14 +248,14 @@ h3 {
 
 .approval-toast strong {
   display: block;
-  color: oklch(15% 0.008 70);
+  color: oklch(18% 0.045 250);
   font-size: 0.9rem;
 }
 
 .approval-toast small {
   display: block;
   margin-top: 2px;
-  color: oklch(48% 0.012 78);
+  color: oklch(50% 0.025 250);
   font-size: 0.76rem;
 }
 
@@ -818,3 +818,417 @@ th,
 .page-content .text-xl { font-size: 1.25rem; }
 .page-content .text-2xl { font-size: 1.55rem; }
 .page-content .text-3xl { font-size: 1.85rem; }
+
+/* ============================================================
+   Polish layer v2 — ambient motion & micro-interactions
+   ============================================================ */
+
+@keyframes ui-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ui-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(26px, -20px) scale(1.1); }
+}
+
+@keyframes ui-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(67% 0.213 38 / 0.45); }
+  55%      { box-shadow: 0 0 0 6px oklch(67% 0.213 38 / 0); }
+}
+
+@keyframes ui-slide-bg {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+
+@keyframes ui-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Auth screens: soft drifting light behind the card */
+.min-h-screen.bg-gradient-to-br,
+.min-h-screen.bg-linear-to-br {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.min-h-screen.bg-gradient-to-br::before,
+.min-h-screen.bg-gradient-to-br::after,
+.min-h-screen.bg-linear-to-br::before,
+.min-h-screen.bg-linear-to-br::after {
+  content: "";
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  filter: blur(8px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.min-h-screen.bg-gradient-to-br::before,
+.min-h-screen.bg-linear-to-br::before {
+  top: -190px;
+  right: -120px;
+  background: radial-gradient(circle, oklch(67% 0.213 38 / 0.22), transparent 68%);
+  animation: ui-drift 18s ease-in-out infinite alternate;
+}
+
+.min-h-screen.bg-gradient-to-br::after,
+.min-h-screen.bg-linear-to-br::after {
+  bottom: -210px;
+  left: -140px;
+  background: radial-gradient(circle, oklch(70% 0.1 210 / 0.2), transparent 68%);
+  animation: ui-drift 22s ease-in-out infinite alternate-reverse;
+}
+
+.min-h-screen .bg-white.rounded-2xl {
+  animation: ui-fade-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Topbar: slow travelling hairline */
+.topbar {
+  position: relative;
+}
+
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(67% 0.213 38 / 0.4), transparent);
+  background-size: 200% 100%;
+  animation: ui-slide-bg 9s linear infinite;
+  pointer-events: none;
+}
+
+/* Navigation */
+.nav-link svg {
+  transition: transform 200ms ease;
+}
+
+.nav-link:hover svg {
+  transform: scale(1.1) translateX(1px);
+}
+
+.nav-link.has-pending .nav-count {
+  animation: ui-pulse 2.4s ease-in-out infinite;
+}
+
+/* Cards */
+.page-content .bg-white {
+  border-color: oklch(90% 0.012 250);
+}
+
+.page-content .bg-white:hover {
+  border-color: oklch(86% 0.06 255);
+}
+
+/* Primary actions */
+.page-content button.bg-blue-600,
+.page-content a.bg-blue-600 {
+  transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.page-content button.bg-blue-600:hover:not(:disabled),
+.page-content a.bg-blue-600:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 20px -14px oklch(47% 0.16 40 / 0.65);
+}
+
+.page-content button.bg-blue-600:active:not(:disabled),
+.page-content a.bg-blue-600:active {
+  transform: scale(0.978);
+}
+
+/* Forms */
+input,
+select,
+textarea {
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+/* Tables */
+.page-content table tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.page-content table tbody tr:hover {
+  background-color: oklch(97.2% 0.008 250);
+}
+
+/* Feedback banners */
+.page-content .bg-green-50,
+.page-content .bg-red-50,
+.page-content .bg-yellow-50,
+.page-content .bg-blue-50 {
+  animation: ui-fade-up 260ms ease both;
+}
+
+/* Loaders */
+.page-loader-lines span {
+  background: linear-gradient(90deg, oklch(90% 0.012 250) 25%, #fff 50%, oklch(90% 0.012 250) 75%);
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.35s linear infinite;
+}
+
+.page-loader-lines span:nth-child(2) { animation-delay: -0.35s; }
+.page-loader-lines span:nth-child(3) { animation-delay: -0.7s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .min-h-screen.bg-gradient-to-br::before,
+  .min-h-screen.bg-gradient-to-br::after,
+  .min-h-screen.bg-linear-to-br::before,
+  .min-h-screen.bg-linear-to-br::after,
+  .min-h-screen .bg-white.rounded-2xl,
+  .topbar::after,
+  .nav-link.has-pending .nav-count,
+  .page-content .bg-green-50,
+  .page-content .bg-red-50,
+  .page-content .bg-yellow-50,
+  .page-content .bg-blue-50,
+  .page-loader-lines span {
+    animation: none;
+  }
+
+  .page-content button.bg-blue-600:hover:not(:disabled),
+  .page-content a.bg-blue-600:hover,
+  .page-content button.bg-blue-600:active:not(:disabled),
+  .page-content a.bg-blue-600:active,
+  .nav-link:hover svg {
+    transform: none;
+  }
+}
+
+/* Unify focus: one soft accent ring instead of the global outline + Tailwind ring */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: oklch(55% 0.17 255);
+  box-shadow: 0 0 0 3px oklch(67% 0.213 38 / 0.18);
+}
+
+/* ============================================================
+   Polish layer v3 — sign-in pages now share the paper / ink /
+   indigo palette used by the student and admin portals
+   ============================================================ */
+
+.auth-page {
+  --color-blue-50: oklch(96.4% 0.018 255);
+  --color-blue-100: oklch(92% 0.032 255);
+  --color-blue-200: oklch(86% 0.055 255);
+  --color-blue-500: oklch(55% 0.17 255);
+  --color-blue-600: oklch(55% 0.17 255);
+  --color-blue-700: oklch(45% 0.16 255);
+  --color-blue-800: oklch(37% 0.14 255);
+  --color-indigo-50: oklch(96% 0.02 258);
+
+  --color-slate-200: oklch(90% 0.012 250);
+  --color-slate-300: oklch(84% 0.014 250);
+  --color-slate-400: oklch(58% 0.025 250);
+  --color-slate-500: oklch(50% 0.025 250);
+  --color-slate-700: oklch(36% 0.035 250);
+  --color-slate-900: oklch(23% 0.045 250);
+
+  background-color: oklch(97.8% 0.008 78);
+}
+
+.auth-page.bg-gradient-to-br::before,
+.auth-page.bg-linear-to-br::before {
+  background: radial-gradient(circle, oklch(55% 0.17 255 / 0.2), transparent 68%);
+}
+
+.auth-page.bg-gradient-to-br::after,
+.auth-page.bg-linear-to-br::after {
+  background: radial-gradient(circle, oklch(70% 0.12 255 / 0.16), transparent 68%);
+}
+
+.auth-card {
+  padding: 30px 30px 26px;
+  border-radius: 18px;
+  animation: ui-fade-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.auth-mark {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(145deg, oklch(58% 0.17 255), oklch(40% 0.15 255));
+  box-shadow: 0 12px 24px -14px oklch(45% 0.16 255 / 0.6);
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease;
+}
+
+.auth-page .auth-brand:hover .auth-mark {
+  transform: translateY(-2px) rotate(-5deg);
+  box-shadow: 0 16px 30px -14px oklch(45% 0.16 255 / 0.7);
+}
+
+.auth-brand-name {
+  display: grid;
+  gap: 2px;
+  color: oklch(23% 0.045 250);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.auth-brand-name small {
+  color: oklch(50% 0.025 250);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+}
+
+.auth-title {
+  margin: 0;
+  color: oklch(23% 0.045 250);
+  font-family: var(--font-sans);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.auth-sub {
+  margin: 5px 0 22px;
+  color: oklch(50% 0.025 250);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Page title icon in the topbar */
+.topbar-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: oklch(45% 0.16 255);
+  background: oklch(96% 0.02 255);
+  border: 1px solid oklch(88% 0.05 255);
+  animation: ui-icon-pop 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes ui-icon-pop {
+  from { opacity: 0; transform: translateY(5px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Sidebar: sliding accent rail + label nudge */
+.nav-link {
+  overflow: hidden;
+}
+
+.nav-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: oklch(58% 0.17 255);
+  opacity: 0;
+  transform: translateY(-50%) scaleY(0.15);
+  transition: opacity 180ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-link:hover::before,
+.nav-link.active::before {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+
+.nav-link span {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-link:hover span {
+  transform: translateX(3px);
+}
+
+/* Tables: rows glide slightly */
+.page-content table tbody tr {
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.page-content table tbody tr:hover {
+  transform: translateX(2px);
+}
+
+/* Cards and banners: gentle hover lift */
+.page-content .bg-white.rounded-xl,
+.page-content .bg-white.rounded-2xl {
+  transition: box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease;
+}
+
+.page-content .bg-white.rounded-xl:hover,
+.page-content .bg-white.rounded-2xl:hover {
+  box-shadow: 0 18px 40px -30px oklch(30% 0.02 70 / 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-card,
+  .topbar-icon {
+    animation: none;
+  }
+
+  .auth-mark,
+  .nav-link::before,
+  .nav-link span,
+  .page-content table tbody tr,
+  .page-content .bg-white.rounded-xl,
+  .page-content .bg-white.rounded-2xl {
+    transition: none;
+  }
+
+  .auth-page .auth-brand:hover .auth-mark,
+  .nav-link:hover span,
+  .page-content table tbody tr:hover {
+    transform: none;
+  }
+}
+
+/* Shared auth palette: indigo focus ring and ink primary button */
+.auth-page input:focus,
+.auth-page input:focus-visible,
+.auth-page textarea:focus,
+.auth-page textarea:focus-visible,
+.auth-page select:focus,
+.auth-page select:focus-visible {
+  outline: none;
+  border-color: oklch(55% 0.17 255);
+  box-shadow: 0 0 0 3px oklch(55% 0.17 255 / 0.18);
+}
+
+.auth-page button.bg-blue-600,
+.auth-page a.bg-blue-600 {
+  background-color: oklch(23% 0.045 250);
+}
+
+.auth-page button.bg-blue-600:hover:not(:disabled),
+.auth-page a.bg-blue-600:hover {
+  background-color: oklch(31% 0.05 255);
+}

@@ -91,6 +91,8 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const currentPage = location.pathname.split('/').filter(Boolean).pop() ?? 'dashboard'
   const title = pageTitles[currentPage] ?? 'Dashboard'
+  const activeItem = navigation.flatMap((group) => group.items).find((item) => item.path === location.pathname)
+  const PageIcon = activeItem?.icon ?? LayoutDashboard
 
   async function handleLogout() {
     try {
@@ -132,6 +134,7 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
       <div className="main-column">
         <header className="topbar">
           <div className="topbar-heading">
+            <span className="topbar-icon" key={currentPage} aria-hidden="true"><PageIcon size={17} strokeWidth={1.9} /></span>
             <h1>{title}</h1>
           </div>
           <div className="topbar-actions">

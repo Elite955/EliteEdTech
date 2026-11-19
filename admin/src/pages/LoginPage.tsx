@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { ArrowRight, Eye, EyeOff, KeyRound, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, GraduationCap, KeyRound, ShieldCheck } from 'lucide-react'
 import type { AuthenticatedUser, Permission } from '../auth/context'
 import { PortalRedirect } from '../auth/PortalRedirect'
 import { homePathForUser, portalUrlForUser } from '../auth/roleRoutes'
@@ -120,7 +120,7 @@ export function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-brand">
-        <div className="brand-logo"><span>e</span></div>
+          <div className="brand-logo"><GraduationCap size={20} strokeWidth={2} /></div>
         <div className="brand-copy">
           <span className="eyebrow">EDTECH PLATFORM</span>
           <h1>Manage the work behind every class.</h1>
@@ -129,7 +129,7 @@ export function LoginPage() {
       </section>
       <section className="login-panel">
         <div className="login-card">
-          <div className="mobile-brand"><div className="brand-logo"><span>e</span></div><b>EdTech Platform</b></div>
+          <div className="mobile-brand"><div className="brand-logo"><GraduationCap size={20} strokeWidth={2} /></div><b>EdTech Platform</b></div>
           <span className="eyebrow">ACCOUNT SIGN-IN</span>
           <h2>{stage === 'credentials' ? 'Welcome back' : stage === 'enroll' ? 'Set up your authenticator' : 'Verify it’s you'}</h2>
           <p className="login-intro">

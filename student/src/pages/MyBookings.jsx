@@ -86,9 +86,14 @@ export default function MyBookings() {
                   {b.status === 'pending' && <span className="muted">Waiting for teacher approval</span>}
                   {b.status === 'rejected' && <span className="muted">The teacher declined this request</span>}
                   {b.status === 'approved' && (
-                    <button className="btn small" disabled={payingId === b.id} onClick={() => payNow(b)}>
-                      {payingId === b.id ? 'Opening checkout…' : 'Pay now'}
-                    </button>
+                    <div className="pay-options">
+                      <button className="btn small" disabled={payingId === b.id} onClick={() => payNow(b)}>
+                        {payingId === b.id
+                          ? 'Opening checkout…'
+                          : `Pay ₹${Number(b.amount || 0).toLocaleString('en-IN')}`}
+                      </button>
+                      <small>UPI · Cards · Netbanking · Wallets</small>
+                    </div>
                   )}
                   {b.status === 'paid' && <span className="muted">Paid — class confirmed</span>}
                   {b.status === 'completed' && (

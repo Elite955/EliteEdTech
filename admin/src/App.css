@@ -691,3 +691,377 @@ button, input, select, textarea { font-family: var(--font-body); }
 th, td { padding: 11px 14px; }
 
 .page-content { font-size: 0.95rem; }
+/* ============================================================
+   Polish layer v2 — ambient motion & micro-interactions
+   ============================================================ */
+
+@keyframes ui-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ui-pop-in {
+  0%   { opacity: 0; transform: scale(0.92); }
+  60%  { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ui-sheen {
+  0%   { transform: translateX(-160%) skewX(-18deg); opacity: 0; }
+  20%  { opacity: 0.7; }
+  100% { transform: translateX(340%) skewX(-18deg); opacity: 0; }
+}
+
+@keyframes ui-ambient {
+  from { background-position: 12% 18%, 88% 82%; }
+  to   { background-position: 22% 30%, 74% 68%; }
+}
+
+@keyframes ui-slide-bg {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+
+@keyframes ui-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Login: soft ambience behind the form */
+.login-panel {
+  position: relative;
+  background-image:
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 62%),
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--good) 7%, transparent), transparent 58%);
+  background-size: 72% 72%, 58% 58%;
+  background-repeat: no-repeat;
+  animation: ui-ambient 20s ease-in-out infinite alternate;
+}
+
+.login-card {
+  animation: ui-fade-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.login-brand .brand-logo {
+  animation: ui-pop-in 600ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Topbar: slow travelling hairline */
+.topbar {
+  position: relative;
+}
+
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 45%, transparent), transparent);
+  background-size: 200% 100%;
+  animation: ui-slide-bg 9s linear infinite;
+  pointer-events: none;
+}
+
+/* Buttons */
+.primary-button,
+.secondary-button,
+.text-button,
+.icon-button,
+.table-action {
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.primary-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.primary-button::after {
+  content: "";
+  position: absolute;
+  top: -40%;
+  bottom: -40%;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: translateX(-160%) skewX(-18deg);
+  pointer-events: none;
+}
+
+.primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 20px -14px color-mix(in oklab, var(--accent-ink) 75%, transparent);
+}
+
+.primary-button:hover:not(:disabled)::after {
+  animation: ui-sheen 720ms ease;
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.icon-button:active:not(:disabled),
+.table-action:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+.secondary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -16px color-mix(in oklab, var(--ink) 60%, transparent);
+}
+
+/* Sidebar navigation */
+.nav-link svg {
+  transition: transform 200ms ease;
+}
+
+.nav-link:hover svg {
+  transform: scale(1.1) translateX(1px);
+}
+
+.nav-link.active {
+  box-shadow: inset 3px 0 var(--night-soft), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Stat cards */
+.stat-card {
+  overflow: hidden;
+}
+
+.stat-icon {
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.stat-card:hover .stat-icon {
+  transform: scale(1.1) rotate(-5deg);
+}
+
+.stat-card strong {
+  animation: ui-pop-in 460ms 90ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Form controls */
+.page-content input:not([type="checkbox"]):not([type="radio"]),
+.page-content select,
+.page-content textarea,
+.dialog-form input,
+.dialog-form select,
+.dialog-form textarea,
+.login-form input,
+.login-form select {
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.page-content input:not([type="checkbox"]):not([type="radio"]):focus,
+.page-content select:focus,
+.page-content textarea:focus,
+.dialog-form input:focus,
+.dialog-form select:focus,
+.dialog-form textarea:focus,
+.login-form input:focus,
+.login-form select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
+}
+
+.search-field {
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.search-field:focus-within {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+/* Tables */
+tbody tr {
+  transition: background 150ms ease, box-shadow 150ms ease;
+}
+
+tbody tr:hover td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Feedback messages */
+.alert,
+.form-error,
+.form-success {
+  animation: ui-fade-up 260ms ease both;
+}
+
+/* Loaders */
+.page-loader-lines span {
+  background: linear-gradient(90deg, var(--paper-3) 25%, var(--surface) 50%, var(--paper-3) 75%);
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.35s linear infinite;
+}
+
+.page-loader-lines span:nth-child(2) { animation-delay: -0.35s; }
+.page-loader-lines span:nth-child(3) { animation-delay: -0.7s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-panel,
+  .login-card,
+  .login-brand .brand-logo,
+  .topbar::after,
+  .primary-button:hover:not(:disabled)::after,
+  .stat-card strong,
+  .alert,
+  .form-error,
+  .form-success,
+  .page-loader-lines span {
+    animation: none;
+  }
+
+  .primary-button:hover:not(:disabled),
+  .secondary-button:hover:not(:disabled),
+  .primary-button:active:not(:disabled),
+  .secondary-button:active:not(:disabled),
+  .icon-button:active:not(:disabled),
+  .table-action:active:not(:disabled),
+  .nav-link:hover svg,
+  .stat-card:hover .stat-icon {
+    transform: none;
+  }
+}
+
+/* Unify focus on form controls (they already get a soft accent ring) */
+.page-content input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+.page-content select:focus-visible,
+.page-content textarea:focus-visible,
+.dialog-form input:focus-visible,
+.dialog-form select:focus-visible,
+.dialog-form textarea:focus-visible,
+.login-form input:focus-visible,
+.login-form select:focus-visible {
+  outline: none;
+}
+
+/* ============================================================
+   Polish layer v3 — page title icons, sliding navigation and
+   consistent auth mark across the three portals
+   ============================================================ */
+
+.topbar-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in oklab, var(--accent) 16%, transparent);
+  animation: ui-icon-pop 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes ui-icon-pop {
+  from { opacity: 0; transform: translateY(5px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.nav-link {
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  opacity: 0;
+  transform: translateY(-50%) scaleY(0.15);
+  transition: opacity 180ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-link:hover::before,
+.nav-link.active::before {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+
+.nav-link span {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav-link:hover span {
+  transform: translateX(3px);
+}
+
+table tbody tr {
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+table tbody tr:hover {
+  transform: translateX(2px);
+}
+
+.login-brand .brand-logo svg,
+.mobile-brand .brand-logo svg {
+  display: block;
+}
+
+.login-card .login-submit svg {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.login-card .login-submit:hover svg {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-icon {
+    animation: none;
+  }
+
+  .nav-link::before,
+  .nav-link span,
+  table tbody tr,
+  .login-card .login-submit svg {
+    transition: none;
+  }
+
+  .nav-link:hover span,
+  table tbody tr:hover,
+  .login-card .login-submit:hover svg {
+    transform: none;
+  }
+}
+
+/* Shared auth palette: same mark size, sentence-case title, indigo + coral ambience */
+.login-brand .brand-logo,
+.mobile-brand .brand-logo {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-radius: 14px;
+}
+
+.login-brand .brand-logo svg,
+.mobile-brand .brand-logo svg {
+  width: 24px;
+  height: 24px;
+}
+
+.login-card h2 {
+  text-transform: none;
+}
+
+.login-panel {
+  background-image:
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 62%),
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, oklch(70% 0.12 255) 8%, transparent), transparent 58%);
+}
