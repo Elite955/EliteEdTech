@@ -254,6 +254,21 @@ studentRouter.post('/bookings', requireAuthenticatedUser, requireStudent, async 
       [req.auth.id, teacher_id, startsAt, endsAt, amount],
     );
     await writeAudit(req, { actorId: req.auth.id, event: 'booking_created', module: 'bookings', targetId: inserted[0].id });
+    const { rows: studentRows } = await pool.query(
+      `SELECT id, name, email, phone, role FROM users WHERE id = $1`,
+      [req.auth.id],
+    );
+    void sendBookingDetails(pool, studentRows, {
+      bookingId: inserted[0].id,
+      kind: 'booking_request',
+      studentName: studentRows[0]?.name ?? 'Student',
+      teacherName: teacher.name,
+      date: inserted[0].date,
+      startTime: inserted[0].start_time,
+      endTime: inserted[0].end_time,
+      amount,
+      meetingUrl: null,
+    }).catch((error) => console.error('Booking request notification failed:', error.message));
     return res.status(201).json({
       booking: {
         ...inserted[0],
@@ -491,6 +506,8 @@ studentRouter.get('/sessions/mine', requireAuthenticatedUser, requireStudent, as
               cs.started_at, cs.ended_at, cs.recording_url, cs.recording_consent, cs.status,
               b.status AS booking_status,
               t.name AS teacher_name,
+              b.starts_at AS start_at,
+              b.ends_at AS end_at,
               to_char(b.starts_at AT TIME ZONE '${IST_ZONE}', 'YYYY-MM-DD') AS date,
               to_char(b.starts_at AT TIME ZONE '${IST_ZONE}', 'HH24:MI') AS start_time,
               to_char(b.ends_at AT TIME ZONE '${IST_ZONE}', 'HH24:MI') AS end_time,
@@ -532,6 +549,20 @@ studentRouter.post('/sessions/:id/meeting', requireAuthenticatedUser, requireStu
     if (!rows.length) return res.status(404).json({ error: 'Class session not found.' });
     if (['cancelled', 'completed'].includes(rows[0].status)) {
       return res.status(400).json({ error: 'This class is no longer available to join.' });
+    }
+
+    const { rows: timingRows } = await pool.query(
+      `SELECT b.starts_at, b.ends_at FROM class_sessions cs
+       JOIN bookings b ON b.id = cs.booking_id
+       WHERE cs.id = $1 AND b.student_id = $2`,
+      [req.params.id, req.auth.id],
+    );
+    const timing = timingRows[0];
+    if (timing && Date.now() < new Date(timing.starts_at).getTime()) {
+      const seconds = Math.max(1, Math.ceil((new Date(timing.starts_at).getTime() - Date.now()) / 1000));
+      return res.status(403).json({
+        error: `The session has not started yet. It starts in ${Math.floor(seconds / 60)}m ${seconds % 60}s.`,
+      });
     }
 
     const result = await ensureSessionMeeting(req.params.id);

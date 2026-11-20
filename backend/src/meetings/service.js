@@ -61,6 +61,14 @@ export async function ensureSessionMeeting(sessionId) {
   if (['cancelled', 'rejected'].includes(row.booking_status)) {
     return { status: 'unavailable', error: 'This booking is not active.', session: row };
   }
+  if (Date.now() < new Date(row.starts_at).getTime()) {
+    const seconds = Math.max(1, Math.ceil((new Date(row.starts_at).getTime() - Date.now()) / 1000));
+    return {
+      status: 'unavailable',
+      error: `The session has not started yet. It starts in ${Math.floor(seconds / 60)}m ${seconds % 60}s.`,
+      session: row,
+    };
+  }
   if (row.meeting_creation_status === 'creating') {
     return { status: 'creating', error: 'A meeting link is already being created.', session: row };
   }

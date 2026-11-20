@@ -146,11 +146,69 @@ async function sendWhatsApp(pool, recipient, { subject, body, bookingId, kind = 
   }
 }
 
+function portalUrl(context, role) {
+  const origin = role === 'teacher'
+    ? (envValue('TEACHER_ORIGIN') || envValue('PORTAL_ORIGIN') || 'http://localhost:5174')
+    : (envValue('STUDENT_ORIGIN') || envValue('PORTAL_ORIGIN') || 'http://localhost:5175');
+  const path = role === 'teacher' ? '/sessions' : '/sessions';
+  const url = new URL(path, origin);
+  if (context.bookingId) url.searchParams.set('bookingId', context.bookingId);
+  return url.toString();
+}
+
 function bookingCopy(recipient, context) {
-  const joinLine = context.meetingUrl
-    ? `Join link: ${context.meetingUrl}`
-    : 'Join link: not ready yet. Open the portal Sessions page before the class.';
+  const joinLine = recipient.role === 'student'
+    ? `Student portal: ${portalUrl(context, 'student')}`
+    : context.meetingUrl
+      ? `Join link: ${context.meetingUrl}`
+      : 'Join link: not ready yet. Open the portal Sessions page before the class.';
   const when = `Date: ${context.date}\nTime: ${context.startTime} - ${context.endTime} IST`;
+  if (context.kind === 'booking_request') {
+    return {
+      subject: `Session request received for ${context.date}`,
+      body: [
+        `Hi ${context.studentName},`,
+        '',
+        `Thank you for selecting a session with ${context.teacherName}. Your request is waiting for teacher approval.`,
+        when,
+        '',
+        `Track the request in the student portal: ${portalUrl(context, 'student')}`,
+        '',
+        'EDTECH',
+      ].join('\n'),
+    };
+  }
+  if (context.kind === 'booking_rejected') {
+    return {
+      subject: `Update on your session request for ${context.date}`,
+      body: [
+        `Hi ${context.studentName},`,
+        '',
+        `${context.teacherName} was unable to accept your requested session time. Please choose another available slot in the student portal.`,
+        when,
+        '',
+        `Open the student portal: ${portalUrl(context, 'student')}`,
+        '',
+        'EDTECH',
+      ].join('\n'),
+    };
+  }
+  if (context.kind === 'booking_approved') {
+    return {
+      subject: `Session confirmed with ${context.teacherName} on ${context.date}`,
+      body: [
+        `Hi ${context.studentName},`,
+        '',
+        `Thank you for selecting this session. Your session with ${context.teacherName} is confirmed and awaiting payment.`,
+        when,
+        '',
+        `Open the student portal to review and pay: ${portalUrl(context, 'student')}`,
+        'The Zoom link becomes available only through the portal at the scheduled start time.',
+        '',
+        'EDTECH',
+      ].join('\n'),
+    };
+  }
   if (context.kind === 'join_details') {
     if (recipient.role === 'teacher') {
       return {

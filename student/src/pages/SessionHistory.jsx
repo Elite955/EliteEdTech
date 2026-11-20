@@ -4,10 +4,34 @@ import StatusBadge from '../components/StatusBadge'
 import CompletionEffect from '../components/CompletionEffect'
 import JoinClassDialog from '../components/JoinClassDialog'
 
+function SessionCountdown({ startAt }) {
+  const [remaining, setRemaining] = useState(() => Math.max(0, new Date(startAt).getTime() - Date.now()))
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRemaining(Math.max(0, new Date(startAt).getTime() - Date.now()))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [startAt])
+
+  if (remaining <= 0) return <span>Session has started</span>
+  const seconds = Math.floor(remaining / 1000)
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+  return <span>Starts in {hours}h {minutes}m {secs}s</span>
+}
+
 export default function SessionHistory() {
   const [sessions, setSessions] = useState(null)
   const [err, setErr] = useState('')
   const [joining, setJoining] = useState(null)
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     api
@@ -50,9 +74,19 @@ export default function SessionHistory() {
                 </div>
                 <div className="row">
                   {s.session_id && ['scheduled', 'ongoing'].includes(s.status) && !['cancelled', 'rejected', 'completed'].includes(s.booking_status) && (
-                    <button className="btn small" type="button" onClick={() => setJoining(s)}>
-                      Join class
-                    </button>
+                    <>
+                      {s.start_at && (
+                        <span className="muted"><SessionCountdown startAt={s.start_at} /></span>
+                      )}
+                      <button
+                        className="btn small"
+                        type="button"
+                        disabled={Boolean(s.start_at && now < new Date(s.start_at).getTime())}
+                        onClick={() => setJoining(s)}
+                      >
+                        Join class
+                      </button>
+                    </>
                   )}
                   {s.recording_consent && s.recording_url ? (
                     <a className="btn small ghost" href={s.recording_url} target="_blank" rel="noreferrer">

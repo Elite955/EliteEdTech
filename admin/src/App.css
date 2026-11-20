@@ -360,6 +360,16 @@ tbody tr:hover { background: var(--paper-2); }
   .dashboard-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 680px) {
+  .portal-topbar { height: 62px; padding-inline: 14px; }
+  .portal-content { width: calc(100% - 28px); padding: 25px 0 36px; }
+  .portal-intro { align-items: flex-start; flex-direction: column; gap: 11px; margin-bottom: 18px; }
+  .portal-intro h1 { font-size: 23px; }
+  .portal-intro p:not(.eyebrow) { font-size: 11px; }
+  .portal-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .portal-wide { grid-column: auto; }
+  .portal-session-row { flex-wrap: wrap; }
+  .portal-session-row > .primary-button { margin-left: 45px; }
+  .portal-actions { margin-left: 45px; }
   .topbar { height: 68px; padding-inline: 14px; }
   .topbar h1 { font-size: 15px; }
   .topbar-actions { gap: 9px; }

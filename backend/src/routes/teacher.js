@@ -4,6 +4,7 @@ import { pool } from '../db/pool.js';
 import { requireAuthenticatedUser } from '../security/authMiddleware.js';
 import { writeAudit } from '../security/audit.js';
 import { ensureSessionMeeting } from '../meetings/service.js';
+import { sendBookingDetails } from '../notifications/notifier.js';
 
 export const teacherRouter = Router();
 
@@ -365,6 +366,24 @@ async function decideBooking(req, res, next, id, action) {
        WHERE b.id = $1`,
       [id],
     );
+    const booking = bookingRows[0];
+    const personResult = await pool.query(
+      `SELECT u.id, u.name, u.email, u.phone, u.role
+       FROM users u WHERE u.id = ANY($1::uuid[])`,
+      [[booking.student_id, booking.teacher_id]],
+    );
+    const studentRecipient = personResult.rows.find((row) => row.role === 'student');
+    void sendBookingDetails(pool, studentRecipient ? [studentRecipient] : [], {
+      bookingId: booking.id,
+      kind: action === 'approve' ? 'booking_approved' : 'booking_rejected',
+      studentName: personResult.rows.find((row) => row.role === 'student')?.name ?? 'Student',
+      teacherName: personResult.rows.find((row) => row.role === 'teacher')?.name ?? 'your teacher',
+      date: booking.date,
+      startTime: booking.start_time,
+      endTime: booking.end_time,
+      amount: Number(booking.amount),
+      meetingUrl: null,
+    }).catch((error) => console.error('Booking decision notification failed:', error.message));
     return res.json({ booking: bookingPayload(bookingRows[0]) });
   } catch (error) {
     return next(error);
