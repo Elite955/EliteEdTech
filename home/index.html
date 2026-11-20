@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#182a4a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+    <title>EDTECH - one-to-one tutoring</title>
+  </head>
+  <body>
+    <a class="skip" href="#portals">Skip to portals</a>
+
+    <header class="masthead">
+      <p class="brand">
+        <i class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v4c0 1.7 2.7 3 6 3s6-1.3 6-3v-4M22 10v6"/></svg>
+        </i>
+        EDTECH <span>one-to-one</span>
+      </p>
+      <nav class="masthead-nav" aria-label="Page sections">
+        <a href="#how">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h11M3 12h8M3 18h11"/><path d="m18 8 2 2 3-3"/></svg>
+          How it works
+        </a>
+        <a href="#spaces">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18v12H3z"/><path d="M8 20h8M12 16v4"/></svg>
+          The desks
+        </a>
+        <a href="#portals">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V4a1 1 0 0 1 1-1h10v18"/><path d="M15 21V8l5 4v9M11 12h.01"/></svg>
+          Portals
+        </a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="kicker">Live one-to-one tutoring</p>
+          <h1 id="hero-title">A better way to learn, together.</h1>
+          <p class="lead">
+            EDTECH brings students and teachers into one focused place for booking, preparation and
+            live one-to-one classes. Everything around the lesson stays simple, so the lesson itself
+            gets your full attention.
+          </p>
+          <div class="hero-actions">
+            <a class="btn" data-portal="student" href="http://localhost:5175/login">Enter student portal</a>
+            <a class="btn ghost" href="#how">See how it works</a>
+          </div>
+          <div class="hero-meta">
+            <span>Students book sessions</span>
+            <span>Teachers set availability</span>
+            <span>Each portal stays separate</span>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-label="The path to a class">
+          <div class="visual-topline">
+            <span>One lesson</span>
+            <span>Clear path</span>
+          </div>
+          <ol class="visual-steps">
+            <li><span class="step-mark">01</span><span><strong>Find your teacher</strong><small>Browse by subject and rate</small></span></li>
+            <li><span class="step-mark">02</span><span><strong>Request a time</strong><small>Choose from real availability</small></span></li>
+            <li><span class="step-mark">03</span><span><strong>Meet in class</strong><small>Join the live session</small></span></li>
+          </ol>
+          <div class="visual-foot">
+            <span class="dot dot-coral"></span>
+            <span class="dot dot-mint"></span>
+            <span class="dot dot-gold"></span>
+            <p>Built for the work before and after the call.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="portals-section" id="portals" aria-labelledby="portals-title">
+        <div class="section-head">
+          <p class="kicker">Two rooms, one platform</p>
+          <h2 id="portals-title">Pick the desk that is yours.</h2>
+          <p>Students and teachers sign in separately. Each room opens with only the tools that belong there.</p>
+        </div>
+
+        <div class="portals">
+          <article class="portal-card portal-card--student">
+            <div class="portal-top">
+              <span class="portal-badge badge-coral">For students</span>
+              <span class="portal-glyph" aria-hidden="true">S</span>
+            </div>
+            <h3>Student portal</h3>
+            <p class="portal-copy">
+              Find a teacher, request a time and keep every booking, payment and session in one place.
+            </p>
+            <ul class="portal-list">
+              <li>Browse teachers by subject and rate</li>
+              <li>Track bookings, payments and sessions</li>
+              <li>Share feedback after a completed class</li>
+            </ul>
+            <div class="portal-actions">
+              <a class="btn" data-portal="student" href="http://localhost:5175/login">Enter student portal</a>
+              <a class="btn ghost" data-portal="student-register" href="http://localhost:5175/register">Create an account</a>
+            </div>
+          </article>
+
+          <article class="portal-card portal-card--teacher">
+            <div class="portal-top">
+              <span class="portal-badge badge-mint">For teachers</span>
+              <span class="portal-glyph" aria-hidden="true">T</span>
+            </div>
+            <h3>Teacher portal</h3>
+            <p class="portal-copy">
+              Keep your availability current, review requests and stay ready for the next live class.
+            </p>
+            <ul class="portal-list">
+              <li>Set weekly availability</li>
+              <li>Approve or decline booking requests</li>
+              <li>Maintain your tutor profile</li>
+            </ul>
+            <div class="portal-actions">
+              <a class="btn" data-portal="teacher" href="http://localhost:5174/">Enter teacher portal</a>
+              <a class="btn ghost" data-portal="teacher-register" href="http://localhost:5174/register">Create a teacher account</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="how-section" id="how" aria-labelledby="how-title">
+        <div class="section-head section-head--light">
+          <p class="kicker">How it works</p>
+          <h2 id="how-title">From request to class in three clear moves.</h2>
+          <p>No scattered messages, no guesswork about the next step. The workflow carries the details.</p>
+        </div>
+        <div class="steps">
+          <article class="step-card step-card--coral">
+            <span class="step-index">01</span>
+            <h3>Choose a teacher</h3>
+            <p>Compare subjects, rates and the times a teacher has already made available.</p>
+          </article>
+          <article class="step-card step-card--mint">
+            <span class="step-index">02</span>
+            <h3>Request a slot</h3>
+            <p>Send a request for the time that works. The teacher reviews it in their own queue.</p>
+          </article>
+          <article class="step-card step-card--gold">
+            <span class="step-index">03</span>
+            <h3>Attend the session</h3>
+            <p>Once approved and paid, the class appears with the details needed to join.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="spaces-section" id="spaces" aria-labelledby="spaces-title">
+        <div class="section-head">
+          <p class="kicker">Built around the lesson</p>
+          <h2 id="spaces-title">Two desks, each with a job.</h2>
+          <p>The portals share one platform but keep their work separate, from sign-in to daily tools.</p>
+        </div>
+        <div class="spaces">
+          <article class="space-card">
+            <span class="space-mark space-mark--lilac" aria-hidden="true">01</span>
+            <div>
+              <h3>The student desk</h3>
+              <p>Browse teachers, manage bookings, check payment history and leave feedback after class.</p>
+            </div>
+          </article>
+          <article class="space-card">
+            <span class="space-mark space-mark--sky" aria-hidden="true">02</span>
+            <div>
+              <h3>The teacher desk</h3>
+              <p>Publish availability, manage the booking queue, run sessions and review student feedback.</p>
+            </div>
+          </article>
+          <article class="space-card">
+            <span class="space-mark space-mark--coral" aria-hidden="true">03</span>
+            <div>
+              <h3>Clear records</h3>
+              <p>Booking status, session history and payments stay visible to the people who need them.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="statement-section" aria-labelledby="statement-title">
+        <div>
+          <p class="kicker">Our aim</p>
+          <h2 id="statement-title">The lesson is the product. Everything else gets out of the way.</h2>
+        </div>
+        <div class="statement-actions">
+          <p>Ready when you are.</p>
+          <a class="btn btn-light" data-portal="student" href="http://localhost:5175/login">Go to student portal</a>
+          <a class="btn btn-outline-light" data-portal="teacher" href="http://localhost:5174/">Go to teacher portal</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="colophon">
+      <p>EDTECH <span>one-to-one tutoring</span></p>
+      <p class="colophon-meta">Student and teacher portals, one platform. <span id="year"></span></p>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

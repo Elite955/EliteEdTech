@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { useParams } from 'react-router-dom'
 import { Download, FileText, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, Search, Video, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
+import { useSuccessBurst } from '../components/useSuccessBurst'
 import { api, getErrorMessage } from '../lib/api'
+import { playUiSound } from '../lib/sound'
 
 type ModuleRecord = { id: string; title: string; status: string; created_at: string; data: Record<string, unknown> }
 
@@ -41,6 +43,7 @@ function readableValue(value: unknown): string {
 export function ModulePage() {
   const { module = '' } = useParams()
   const { can } = useAuth()
+  const { celebrate, burst } = useSuccessBurst()
   const info = moduleInfo[module]
   const [items, setItems] = useState<ModuleRecord[]>([])
   const [search, setSearch] = useState('')
@@ -108,8 +111,9 @@ export function ModulePage() {
     try {
       await api(`/admin/modules/${module}/${item.id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
       setNotice('Record updated and administrative action logged.')
+      celebrate('Record updated')
       await load()
-    } catch (requestError) { setError(getErrorMessage(requestError)) }
+    } catch (requestError) { playUiSound('error'); setError(getErrorMessage(requestError)) }
   }
 
   async function createRecord(event: FormEvent<HTMLFormElement>) {
@@ -122,10 +126,11 @@ export function ModulePage() {
         body: JSON.stringify({ title: form.title, status: form.status, data: { description: form.description } }),
       })
       setNotice('Record created and administrative action logged.')
+      celebrate('Record created')
       setDialogOpen(false)
       setForm({ title: '', status: 'active', description: '' })
       await load()
-    } catch (requestError) { setError(getErrorMessage(requestError)) }
+    } catch (requestError) { playUiSound('error'); setError(getErrorMessage(requestError)) }
     finally { setSaving(false) }
   }
 
@@ -148,9 +153,10 @@ export function ModulePage() {
         body: JSON.stringify({ data: { value } }),
       })
       setNotice('Platform setting updated and administrative action logged.')
+      celebrate('Setting saved')
       setEditingItem(null)
       await load()
-    } catch (requestError) { setError(getErrorMessage(requestError)) }
+    } catch (requestError) { playUiSound('error'); setError(getErrorMessage(requestError)) }
     finally { setSaving(false) }
   }
 
@@ -169,7 +175,9 @@ export function ModulePage() {
       link.download = `admin-summary.${format}`
       link.click()
       setTimeout(() => URL.revokeObjectURL(url), 0)
+      playUiSound('success')
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     } finally { setExporting('') }
   }
@@ -186,9 +194,11 @@ export function ModulePage() {
         body: JSON.stringify({ ...whatsAppForm, requestId: crypto.randomUUID() }),
       })
       setNotice(`WhatsApp test message status: ${result.status}.`)
+      celebrate('Test message queued', `Status: ${result.status}`)
       setWhatsAppForm((current) => ({ ...current, body: '' }))
       await load()
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     } finally { setSaving(false) }
   }
@@ -201,8 +211,10 @@ export function ModulePage() {
     try {
       const result = await api<{ message: string }>(`/admin/transactions/${item.id}/refund`, { method: 'POST' })
       setNotice(result.message)
+      celebrate('Refund requested')
       await load()
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     } finally { setSaving(false) }
   }
@@ -241,8 +253,10 @@ export function ModulePage() {
     try {
       const result = await api<{ joinUrl: string }>(`/admin/live-classes/${item.id}/test-meeting`, { method: 'POST' })
       setNotice(`Test meeting created: ${result.joinUrl}`)
+      celebrate('Test meeting ready')
       await load()
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     } finally { setSaving(false) }
   }
@@ -253,6 +267,7 @@ export function ModulePage() {
 
   return (
     <div className="module-page">
+      {burst}
       <div className="page-intro">
         <div><p className="eyebrow">PLATFORM OPERATIONS</p><h2>{info.title}</h2><p>{info.description}</p></div>
         <div className="intro-actions">

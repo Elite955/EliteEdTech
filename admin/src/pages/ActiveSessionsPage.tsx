@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { GraduationCap, Monitor, RefreshCw, ShieldCheck, UserCog, Users } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
+import { useSuccessBurst } from '../components/useSuccessBurst'
 import { api, getErrorMessage } from '../lib/api'
+import { playUiSound } from '../lib/sound'
 
 type ActiveSession = {
   id: string
@@ -58,6 +60,7 @@ function accountIcon(accountType: ActiveSession['account_type']) {
 
 export function ActiveSessionsPage() {
   const { user } = useAuth()
+  const { celebrate, burst } = useSuccessBurst()
   const isSuperAdmin = user?.roleCode === 'super_admin'
   const [items, setItems] = useState<ActiveSession[]>([])
   const [loading, setLoading] = useState(isSuperAdmin)
@@ -102,8 +105,10 @@ export function ActiveSessionsPage() {
     try {
       const result = await api<{ message: string }>(`/admin/security/sessions/${session.id}/revoke`, { method: 'POST' })
       setNotice(result.message)
+      celebrate('Session revoked', `${session.name} has been signed out.`)
       refreshSessions()
     } catch (requestError) {
+      playUiSound('error')
       setError(getErrorMessage(requestError))
     } finally {
       setRevokingId('')
@@ -116,6 +121,7 @@ export function ActiveSessionsPage() {
 
   return (
     <div className="sessions-page">
+      {burst}
       <div className="page-intro">
         <div>
           <p className="eyebrow">SECURITY</p>

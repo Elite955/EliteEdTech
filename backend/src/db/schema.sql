@@ -222,6 +222,12 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS request_id UUID;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'booking_confirmation';
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_kind_check;
+ALTER TABLE notifications
+  ADD CONSTRAINT notifications_kind_check
+  CHECK (kind IN ('booking_confirmation', 'join_details', 'general'));
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_status_check;
 ALTER TABLE notifications
   ADD CONSTRAINT notifications_status_check
@@ -229,6 +235,9 @@ ALTER TABLE notifications
 
 CREATE UNIQUE INDEX IF NOT EXISTS notifications_request_id_idx
   ON notifications(request_id) WHERE request_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS notifications_booking_id_idx
+  ON notifications(booking_id) WHERE booking_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS managed_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -293,6 +302,33 @@ CREATE INDEX IF NOT EXISTS teacher_availability_slots_teacher_start_idx ON teach
 CREATE INDEX IF NOT EXISTS payments_status_created_at_idx ON payments(status, created_at);
 CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS managed_records_module_created_at_idx ON managed_records(module, created_at DESC);
+
+ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS mfa_secret_encrypted TEXT;
+ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS mfa_pending_secret_encrypted TEXT;
+ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS mfa_pending_expires_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS teacher_availability (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  weekday SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  CHECK (end_time > start_time),
+  UNIQUE (teacher_id, weekday, start_time, end_time)
+);
+CREATE INDEX IF NOT EXISTS teacher_availability_teacher_idx ON teacher_availability(teacher_id, weekday);
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+  student_id UUID NOT NULL REFERENCES users(id),
+  teacher_id UUID NOT NULL REFERENCES users(id),
+  rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  testimony_text TEXT NOT NULL DEFAULT '',
+  allow_display BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS feedback_teacher_idx ON feedback(teacher_id);
 
 CREATE OR REPLACE FUNCTION prevent_audit_log_mutation()
 RETURNS trigger

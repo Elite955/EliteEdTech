@@ -1,5 +1,5 @@
 import '../config.js';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../security/passwords.js';
 import { pool } from './pool.js';
 
 const modules = [
@@ -85,7 +85,7 @@ async function seed() {
        ON CONFLICT DO NOTHING`,
     );
 
-    const passwordHash = await bcrypt.hash(BOOTSTRAP_ADMIN_PASSWORD, 12);
+    const passwordHash = await hashPassword(BOOTSTRAP_ADMIN_PASSWORD, client);
     const { rows: userRows } = await client.query(
       `INSERT INTO users (role, name, email, password_hash)
        VALUES ('admin', $1, lower($2), $3)
@@ -101,8 +101,55 @@ async function seed() {
        ON CONFLICT (user_id) DO UPDATE SET role_id = EXCLUDED.role_id`,
       [userRows[0].id, superAdminRows[0].id],
     );
+
+    const demoPassword = await hashPassword('Student@12345', client);
+    const teacherPassword = await hashPassword('Teach@123456', client);
+    const { rows: studentRows } = await client.query(
+      `INSERT INTO users (role, name, email, phone, password_hash)
+       VALUES ('student', 'Demo Student', 'student@edtech.test', '+919000000001', $1)
+       ON CONFLICT (email) DO UPDATE SET role = 'student', name = EXCLUDED.name, password_hash = EXCLUDED.password_hash, status = 'active', updated_at = now()
+       RETURNING id`,
+      [demoPassword],
+    );
+    await client.query(
+      `INSERT INTO student_profiles (user_id, age, grade) VALUES ($1, 14, 'Grade 9')
+       ON CONFLICT (user_id) DO UPDATE SET age = EXCLUDED.age, grade = EXCLUDED.grade`,
+      [studentRows[0].id],
+    );
+
+    const demoTeachers = [
+      { name: 'Ananya Rao', email: 'teacher1@edtech.test', phone: '+919000000002', subjects: ['Mathematics', 'Algebra'], bio: 'IIT-B graduate with 8 years of one-on-one maths coaching for school students.', rate: 450 },
+      { name: 'Rohit Verma', email: 'teacher2@edtech.test', phone: '+919000000003', subjects: ['Science', 'Physics'], bio: 'Physics Olympiad mentor; loves making science intuitive for young learners.', rate: 500 },
+    ];
+    for (const teacher of demoTeachers) {
+      const { rows: teacherUserRows } = await client.query(
+        `INSERT INTO users (role, name, email, phone, password_hash)
+         VALUES ('teacher', $1, lower($2), $3, $4)
+         ON CONFLICT (email) DO UPDATE SET role = 'teacher', name = EXCLUDED.name, password_hash = EXCLUDED.password_hash, status = 'active', updated_at = now()
+         RETURNING id`,
+        [teacher.name, teacher.email, teacher.phone, teacherPassword],
+      );
+      await client.query(
+        `INSERT INTO teacher_profiles (user_id, subjects, bio, hourly_rate, approved)
+         VALUES ($1, $2, $3, $4, true)
+         ON CONFLICT (user_id) DO UPDATE SET subjects = EXCLUDED.subjects, bio = EXCLUDED.bio, hourly_rate = EXCLUDED.hourly_rate, approved = true`,
+        [teacherUserRows[0].id, teacher.subjects, teacher.bio, teacher.rate],
+      );
+      for (const weekday of [1, 2, 3, 4, 5]) {
+        for (const [start, end] of [['16:00', '18:00'], ['19:00', '21:00']]) {
+          await client.query(
+            `INSERT INTO teacher_availability (teacher_id, weekday, start_time, end_time)
+             VALUES ($1, $2, $3::time, $4::time)
+             ON CONFLICT (teacher_id, weekday, start_time, end_time) DO NOTHING`,
+            [teacherUserRows[0].id, weekday, start, end],
+          );
+        }
+      }
+    }
+
     await client.query('COMMIT');
     console.log(`Super Admin bootstrap complete for ${BOOTSTRAP_ADMIN_EMAIL}.`);
+    console.log('Demo accounts seeded: student@edtech.test / Student@12345, teacher1@edtech.test / Teach@123456.');
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
