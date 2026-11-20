@@ -26,6 +26,16 @@ CREATE TABLE IF NOT EXISTS teacher_profiles (
   approved BOOLEAN NOT NULL DEFAULT false
 );
 
+CREATE TABLE IF NOT EXISTS teacher_availability_slots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'booked', 'cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (ends_at > starts_at)
+);
+
 CREATE TABLE IF NOT EXISTS admin_roles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code TEXT NOT NULL UNIQUE,
@@ -117,6 +127,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID NOT NULL REFERENCES users(id),
   teacher_id UUID NOT NULL REFERENCES users(id),
+  availability_id UUID REFERENCES teacher_availability_slots(id),
   starts_at TIMESTAMPTZ NOT NULL,
   ends_at TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'paid', 'completed', 'cancelled')),
@@ -124,6 +135,14 @@ CREATE TABLE IF NOT EXISTS bookings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (ends_at > starts_at)
 );
+
+ALTER TABLE bookings
+  ADD COLUMN IF NOT EXISTS availability_id UUID REFERENCES teacher_availability_slots(id);
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_availability_id_fkey;
+ALTER TABLE bookings
+  ADD CONSTRAINT bookings_availability_id_fkey FOREIGN KEY (availability_id)
+  REFERENCES teacher_availability_slots(id);
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_availability_id_key;
 
 CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -267,6 +286,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS users_role_status_idx ON users(role, status);
 CREATE INDEX IF NOT EXISTS user_sessions_user_active_idx ON user_sessions(user_id, expires_at) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS bookings_status_starts_at_idx ON bookings(status, starts_at);
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_availability_active_idx
+  ON bookings(availability_id)
+  WHERE availability_id IS NOT NULL AND status IN ('pending', 'approved', 'paid');
+CREATE INDEX IF NOT EXISTS teacher_availability_slots_teacher_start_idx ON teacher_availability_slots(teacher_id, starts_at) WHERE status = 'open';
 CREATE INDEX IF NOT EXISTS payments_status_created_at_idx ON payments(status, created_at);
 CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS managed_records_module_created_at_idx ON managed_records(module, created_at DESC);

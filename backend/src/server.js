@@ -9,6 +9,7 @@ import { Server as SocketServer } from 'socket.io';
 import { pool } from './db/pool.js';
 import { authRouter } from './routes/auth.js';
 import { adminRouter } from './routes/admin.js';
+import { studentRouter, teacherRouter } from './routes/portal.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must be set to a random value of at least 32 characters.');
@@ -37,6 +38,8 @@ app.get('/api/health', async (_req, res, next) => {
 });
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/student', studentRouter);
+app.use('/api/teacher', teacherRouter);
 
 app.use((_req, res) => res.status(404).json({ error: 'API route not found.' }));
 app.use((error, _req, res, _next) => {
