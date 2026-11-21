@@ -7,7 +7,6 @@ import ProtectedRoute from './components/ProtectedRoute'
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
-const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'))
 const BrowseTeachers = lazy(() => import('./pages/BrowseTeachers'))
 const RequestSlot = lazy(() => import('./pages/RequestSlot'))
 const MyBookings = lazy(() => import('./pages/MyBookings'))
@@ -38,7 +37,6 @@ export default function App() {
           }
         >
           <Route path="/" element={<Dashboard />} />
-          <Route path="/teacher" element={<TeacherDashboard />} />
           <Route path="/teachers" element={<BrowseTeachers />} />
           <Route path="/request/:teacherId" element={<RequestSlot />} />
           <Route path="/bookings" element={<MyBookings />} />

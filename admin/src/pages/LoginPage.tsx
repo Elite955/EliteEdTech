@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { ArrowRight, Eye, EyeOff, GraduationCap, KeyRound, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, KeyRound, ShieldCheck } from 'lucide-react'
 import type { AuthenticatedUser, Permission } from '../auth/context'
 import { PortalRedirect } from '../auth/PortalRedirect'
 import { homePathForUser, portalUrlForUser } from '../auth/roleRoutes'
 import { useAuth } from '../auth/useAuth'
 import { api, getErrorMessage } from '../lib/api'
+import EliteLoader, { waitForEliteLoader } from '../components/EliteLoader'
 import { playUiSound } from '../lib/sound'
 
 type LoginReply = {
@@ -39,8 +40,9 @@ export function LoginPage() {
     return <Navigate to={homePathForUser(user)} replace />
   }
 
-  async function completeSignIn(reply: LoginReply) {
+  async function completeSignIn(reply: LoginReply, startedAt: number) {
     if (!reply.user || !reply.permissions) throw new Error('The server returned an incomplete sign-in response.')
+    await waitForEliteLoader(startedAt)
     setSession(reply.user, reply.permissions)
     playUiSound('success')
     const portalUrl = portalUrlForUser(reply.user)
@@ -53,6 +55,7 @@ export function LoginPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const startedAt = performance.now()
     setBusy(true)
     setError('')
     try {
@@ -69,7 +72,7 @@ export function LoginPage() {
           setChallenge(reply.challenge)
           setStage('mfa')
         } else {
-          await completeSignIn(reply)
+          await completeSignIn(reply, startedAt)
         }
       } else {
         const path = stage === 'enroll' ? '/auth/mfa/confirm' : '/auth/mfa/verify'
@@ -77,7 +80,7 @@ export function LoginPage() {
           method: 'POST',
           body: JSON.stringify({ challenge, code }),
         })
-        await completeSignIn(reply)
+        await completeSignIn(reply, startedAt)
       }
     } catch (requestError) {
       setError(getErrorMessage(requestError))
@@ -119,17 +122,18 @@ export function LoginPage() {
 
   return (
     <main className="login-page">
+      {busy && <EliteLoader label="Signing in" />}
       <section className="login-brand">
-          <div className="brand-logo"><GraduationCap size={20} strokeWidth={2} /></div>
+          <img className="brand-logo-img" src="/elite-logo-lg.png" alt="Elite" />
         <div className="brand-copy">
-          <span className="eyebrow">EDTECH PLATFORM</span>
+          <span className="eyebrow">ELITE PLATFORM</span>
           <h1>Manage the work behind every class.</h1>
           <p>Review users, roles, bookings, and platform activity from one secure workspace.</p>
         </div>
       </section>
       <section className="login-panel">
         <div className="login-card">
-          <div className="mobile-brand"><div className="brand-logo"><GraduationCap size={20} strokeWidth={2} /></div><b>EdTech Platform</b></div>
+          <div className="mobile-brand"><img className="brand-logo-img" src="/elite-logo-md.png" alt="Elite" /><b>Elite Platform</b></div>
           <span className="eyebrow">ACCOUNT SIGN-IN</span>
           <h2>{stage === 'credentials' ? 'Welcome back' : stage === 'enroll' ? 'Set up your authenticator' : 'Verify it’s you'}</h2>
           <p className="login-intro">

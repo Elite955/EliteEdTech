@@ -536,6 +536,44 @@ studentRouter.get('/sessions/mine', requireAuthenticatedUser, requireStudent, as
   }
 });
 
+studentRouter.post('/sessions/:id/attendance', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
+  try {
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const input = z.object({ action: z.enum(['join', 'leave']) }).safeParse(req.body ?? {});
+    if (!input.success) return validationError(res, input);
+
+    const { rows: sessions } = await pool.query(
+      `SELECT cs.id, cs.status, b.status AS booking_status
+       FROM class_sessions cs
+       JOIN bookings b ON b.id = cs.booking_id
+       WHERE cs.id = $1 AND b.student_id = $2`,
+      [req.params.id, req.auth.id],
+    );
+    const session = sessions[0];
+    if (!session) return res.status(404).json({ error: 'Class session not found.' });
+    if (input.data.action === 'join' &&
+        (['completed', 'cancelled'].includes(session.status) || !['paid', 'completed'].includes(session.booking_status))) {
+      return res.status(400).json({ error: 'This class is not available for attendance.' });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO attendance_records (session_id, user_id, joined_at, left_at)
+       VALUES ($1, $2, CASE WHEN $3 = 'join' THEN now() ELSE NULL END,
+                          CASE WHEN $3 = 'leave' THEN now() ELSE NULL END)
+       ON CONFLICT (session_id, user_id) DO UPDATE SET
+         joined_at = COALESCE(attendance_records.joined_at, EXCLUDED.joined_at),
+         left_at = CASE WHEN $3 = 'leave' THEN now() ELSE attendance_records.left_at END
+       RETURNING id, session_id, user_id, joined_at, left_at`,
+      [req.params.id, req.auth.id, input.data.action],
+    );
+    return res.json({ attendance: rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 studentRouter.post('/sessions/:id/meeting', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
   try {
     if (!z.string().uuid().safeParse(req.params.id).success) {
@@ -590,7 +628,7 @@ studentRouter.get('/chat/messages', requireAuthenticatedUser, requireStudent, as
     const room = req.query.room ?? 'global';
     if (room !== 'global') return res.status(400).json({ error: 'Only the global room is open to students.' });
     const { rows } = await pool.query(
-      `SELECT m.id, m.sender_id, u.name AS sender_name, m.content, m.created_at
+      `SELECT m.id, m.sender_id, u.name AS sender_name, u.role AS sender_role, m.content, m.created_at
        FROM chat_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.room = $1 AND m.status = 'visible'
        ORDER BY m.created_at DESC LIMIT 50`,

@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import EliteLoader, { waitForEliteLoader } from './EliteLoader'
 import GlobalChat from './GlobalChat'
 import PageLoader from './PageLoader'
 import ProfileDialog from './ProfileDialog'
@@ -37,10 +38,10 @@ export default function Layout() {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false)
   const profileButtonRef = useRef(null)
   const [chatOpen, setChatOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const initial = user?.name?.charAt(0).toUpperCase() ?? 'S'
   const extraRoutes = [
-    { match: '/request', label: 'Request a slot', icon: 'calendar' },
-    { match: '/teacher', label: 'Teacher profile', icon: 'profile' }
+    { match: '/request', label: 'Request a slot', icon: 'calendar' }
   ]
   const navItem = navigation
     .flatMap((group) => group.items)
@@ -59,8 +60,15 @@ export default function Layout() {
   }, [location.pathname])
 
   async function handleLogout() {
-    await logout()
-    navigate('/login')
+    const startedAt = performance.now()
+    setProfileOpen(false)
+    setLoggingOut(true)
+    try {
+      await logout()
+      await waitForEliteLoader(startedAt)
+    } finally {
+      navigate('/login')
+    }
   }
 
   function toggleChat() {
@@ -72,8 +80,7 @@ export default function Layout() {
     <div className={`student-shell${collapsed ? ' is-collapsed' : ''}`}>
       <aside className="sidebar" id="student-sidebar">
         <div className="sidebar-brand">
-          <div className="brand-logo"><span>e</span></div>
-          {!collapsed && <div><strong>EdTech</strong><small>STUDENT CONSOLE</small></div>}
+          <img className="brand-logo-img" src="/elite-logo-sm.png" alt="Elite" />
           <button
             type="button"
             className="sidebar-collapse icon-button"
@@ -169,6 +176,7 @@ export default function Layout() {
       )}
       {profileDialogOpen && <ProfileDialog returnFocusRef={profileButtonRef} onClose={() => setProfileDialogOpen(false)} />}
       {chatOpen && <GlobalChat onClose={() => setChatOpen(false)} />}
+      {loggingOut && <EliteLoader label="Signing out" />}
     </div>
   )
 }

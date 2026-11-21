@@ -1,21 +1,31 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, GraduationCap } from 'lucide-react'
+import { QRCodeSVG } from '../lib/qrcode'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import { getErrorMessage } from '../lib/api'
+import EliteLoader, { waitForEliteLoader } from '../components/EliteLoader'
 import { playUiSound } from '../lib/sound'
 
+interface MfaState {
+  challenge: string
+  setup: boolean
+  otpAuthUrl?: string
+  accountName?: string
+}
+
 export function LoginPage() {
-  const { user, login, verifyMfa } = useAuth()
+  const { user, login, confirmMfa, verifyMfa } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [mfaChallenge, setMfaChallenge] = useState<string | null>(null)
-  const [mfaCode, setMfaCode] = useState('')
+  const [mfa, setMfa] = useState<MfaState | null>(null)
+  const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const manualSecret = (mfa?.otpAuthUrl?.match(/secret=([^&]+)/)?.[1] ?? '')
 
   if (user) {
     navigate('/dashboard', { replace: true })
@@ -24,14 +34,21 @@ export function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    const startedAt = performance.now()
     setError('')
     setLoading(true)
     try {
       const result = await login(email, password)
       if (result.redirected) return
-      if (result.requiresMfa && result.challenge) {
-        setMfaChallenge(result.challenge)
+      if (result.challenge) {
+        setMfa({
+          challenge: result.challenge,
+          setup: Boolean(result.requiresMfaSetup),
+          otpAuthUrl: result.otpAuthUrl,
+          accountName: result.accountName,
+        })
       } else {
+        await waitForEliteLoader(startedAt)
         navigate('/dashboard', { replace: true })
       }
     } catch (err) {
@@ -44,38 +61,44 @@ export function LoginPage() {
 
   const handleMfa = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!mfaChallenge) return
+    if (!mfa) return
+    const startedAt = performance.now()
     setError('')
     setLoading(true)
     try {
-      await verifyMfa(mfaChallenge, mfaCode)
+      if (mfa.setup) await confirmMfa(mfa.challenge, code)
+      else await verifyMfa(mfa.challenge, code)
+      await waitForEliteLoader(startedAt)
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      setError(getErrorMessage(err))
+      setError(getErrorMessage(err) + (mfa.setup ? ' If you already have an older entry, remove it from your authenticator app first.' : ''))
       playUiSound('error')
     } finally {
       setLoading(false)
     }
   }
 
+  const title = mfa ? (mfa.setup ? 'Set up your authenticator' : 'Verify it’s you') : 'Welcome back'
+  const subtitle = mfa
+    ? 'Enter the six-digit code from your authenticator app.'
+    : 'Sign in to manage your classes.'
+
   return (
     <div className="auth-page min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+      {loading && <EliteLoader label="Signing in" />}
       <div className="w-full max-w-md">
         <div className="auth-card bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
           <div className="auth-brand">
-            <span className="auth-mark"><GraduationCap size={26} /></span>
-            <span className="auth-brand-name">EDTECH <small>teacher portal</small></span>
+            <span className="auth-brand-name"><img className="auth-brand-logo" src="/elite-logo-md.png" alt="Elite" /><small>teacher portal</small></span>
           </div>
-          <h1 className="auth-title">{mfaChallenge ? 'Verify it’s you' : 'Welcome back'}</h1>
-          <p className="auth-sub">
-            {mfaChallenge ? 'Enter the six-digit code from your authenticator app.' : 'Sign in to manage your classes.'}
-          </p>
+          <h1 className="auth-title">{title}</h1>
+          <p className="auth-sub">{subtitle}</p>
           {params.get('registered') === '1' && (
             <div className="bg-green-50 text-green-800 text-sm px-4 py-3 rounded-lg border border-green-200 mb-5">
               Your teacher account was created. Sign in to continue.
             </div>
           )}
-          {!mfaChallenge ? (
+          {!mfa ? (
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
@@ -124,11 +147,24 @@ export function LoginPage() {
             </form>
           ) : (
             <form onSubmit={handleMfa} className="space-y-5">
+              {mfa.setup && mfa.otpAuthUrl && (
+                <div className="flex flex-col items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="rounded-md bg-white p-2">
+                    <QRCodeSVG value={mfa.otpAuthUrl} size={152} />
+                  </div>
+                  <p className="text-center text-xs text-slate-500">
+                    Scan with your authenticator app for {mfa.accountName || email}
+                  </p>
+                  {manualSecret && (
+                    <code className="mfa-secret">{manualSecret}</code>
+                  )}
+                </div>
+              )}
               <div>
                 <input
                   type="text"
-                  value={mfaCode}
-                  onChange={e => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  value={code}
+                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   required
                   autoFocus
                   maxLength={6}
@@ -143,14 +179,14 @@ export function LoginPage() {
               )}
               <button
                 type="submit"
-                disabled={loading || mfaCode.length !== 6}
+                disabled={loading || code.length !== 6}
                 className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
               >
-                {loading ? <span className="spinner" /> : 'Verify'}
+                {loading ? <span className="spinner" /> : mfa.setup ? 'Enable and sign in' : 'Verify'}
               </button>
               <button
                 type="button"
-                onClick={() => { setMfaChallenge(null); setMfaCode(''); setError('') }}
+                onClick={() => { setMfa(null); setCode(''); setError('') }}
                 className="w-full py-2 text-sm text-slate-500 hover:text-slate-700"
               >
                 ← Back to sign in

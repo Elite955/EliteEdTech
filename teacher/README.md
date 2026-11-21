@@ -1,62 +1,30 @@
-# EdTech Teacher Dashboard
+# Teacher Portal
 
-Teacher-facing SPA for the EdTech one-to-one tutoring platform.
+React 19 + TypeScript + Vite SPA on port `5174`. It consumes the backend API and Socket.IO server.
 
-**Owner:** Ashish
-**Port:** 5174
-**Branch prefix:** `teacher/*`
-
-## Features
-
-- **Profile Management** — Set subjects, bio, and hourly rate
-- **Availability** — Weekly slot grid for student booking
-- **Booking Queue** — Accept/reject student booking requests
-- **Conduct Classes** — Start/end sessions with Zoom integration
-- **Attendance & Session Logs** — View join/leave times and duration
-- **Recording Consent** — Toggle recording per session
-- **Schedule** — Weekly calendar view of all bookings & sessions
-- **Student Feedback** — Read-only testimonials and ratings
-
-## Tech Stack
-
-- React 19 + TypeScript + Vite
-- Tailwind CSS v4
-- React Router v7
-- lucide-react icons
-
-## Setup
+## Run
 
 ```bash
 cd teacher
 npm install
 npm run dev
+npm run lint
+npm run build
 ```
 
-The dev server starts on `http://localhost:5174` and proxies `/api` to the backend at `http://localhost:4000`.
+The dev server proxies `/api` and `/socket.io` to `http://localhost:4000`. For deployed builds, set `VITE_API_URL` to the API origin and `VITE_SOCKET_URL` to the Socket.IO origin.
 
-## API Dependency
+## Features
 
-This SPA consumes the backend API (owned by Bhuvan). It **never** modifies files outside the `teacher/` directory.
+- Profile management: subjects, bio, hourly rate.
+- Weekly availability management.
+- Booking queue with approve/reject.
+- Conduct class with Jitsi embedded meeting or external Google Meet/Zoom link.
+- Teacher-controlled shared whiteboard; students view live updates.
+- Start/end session, teacher attendance recording, recording consent, and recording link storage.
+- Schedule, session logs, attendance, and student feedback.
+- Global chat with role-tagged teacher/student messages.
 
-The following API endpoints are consumed:
+## API
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/login` | Sign in |
-| POST | `/api/auth/mfa/verify` | MFA verification |
-| POST | `/api/auth/logout` | Sign out |
-| GET | `/api/auth/me` | Current session |
-| GET | `/api/teacher/dashboard/stats` | Dashboard summary |
-| GET/PATCH | `/api/teacher/profile` | View/update profile |
-| GET/PUT | `/api/teacher/availability` | Manage availability slots |
-| GET | `/api/teacher/bookings` | List bookings |
-| POST | `/api/teacher/bookings/:id/approve` | Accept booking |
-| POST | `/api/teacher/bookings/:id/reject` | Reject booking |
-| GET | `/api/teacher/sessions` | List class sessions |
-| GET | `/api/teacher/sessions/:id` | Session detail + attendance |
-| POST | `/api/teacher/sessions/:id/start` | Start session |
-| POST | `/api/teacher/sessions/:id/end` | End session |
-| PATCH | `/api/teacher/sessions/:id/recording-consent` | Toggle recording |
-| GET | `/api/teacher/feedback` | View student feedback |
-
-> **Note:** These endpoints need to be implemented in the backend by Bhuvan. The teacher dashboard is designed to work with these exact contracts.
+The current endpoint list is in `../shared/api-contract.md`. Teacher routes use the `edtech_teacher_session` HttpOnly cookie and TOTP MFA after first sign-in. Attendance is written by `POST /api/sessions/:id/start` and `/end`, and recording links are saved with `PATCH /api/teacher/sessions/:id/recording` after recording consent is enabled.

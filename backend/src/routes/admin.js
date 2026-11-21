@@ -763,6 +763,22 @@ adminRouter.post('/live-classes/:id/send-join-details', requireAdmin, requirePer
   } catch (error) { return next(error); }
 });
 
+adminRouter.get('/chat/messages', requireAdmin, requirePermission('chat_moderation', 'view'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.id, m.sender_id, u.name AS sender_name, u.role AS sender_role,
+              m.content, m.room, m.status, m.reported, m.created_at, sp.age
+       FROM chat_messages m
+       JOIN users u ON u.id = m.sender_id
+       LEFT JOIN student_profiles sp ON sp.user_id = u.id
+       ORDER BY m.created_at DESC LIMIT 100`,
+    );
+    return res.json({ messages: rows.reverse() });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 adminRouter.get('/search', requireAdmin, async (req, res, next) => {
   try {
     const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';

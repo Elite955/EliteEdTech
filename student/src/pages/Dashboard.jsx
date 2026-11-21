@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api/client'
+import { api, recordAttendance } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { startRazorpayCheckout } from '../lib/razorpay'
 import { playUiSound } from '../lib/sound'
@@ -46,6 +46,16 @@ export default function Dashboard() {
     .sort((a, b) => `${a.date}${a.start_time}`.localeCompare(`${b.date}${b.start_time}`))
     .slice(0, 3)
   const sessionByBooking = new Map((sessions || []).map((s) => [s.booking_id, s]))
+
+  async function openSession(session) {
+    await recordAttendance(session.session_id, 'join')
+    setJoining(session)
+  }
+
+  async function closeSession() {
+    if (joining) await recordAttendance(joining.session_id, 'leave')
+    setJoining(null)
+  }
 
   return (
     <div>
@@ -116,7 +126,7 @@ export default function Dashboard() {
                       <button
                         className="btn small ghost"
                         type="button"
-                        onClick={() => setJoining(session)}
+                        onClick={() => openSession(session)}
                         style={{ marginLeft: 8 }}
                       >
                         Join class
@@ -129,7 +139,7 @@ export default function Dashboard() {
           })
         )}
       </div>
-      {joining && <JoinClassDialog session={joining} onClose={() => setJoining(null)} />}
+      {joining && <JoinClassDialog session={joining} onClose={closeSession} />}
     </div>
   )
 }

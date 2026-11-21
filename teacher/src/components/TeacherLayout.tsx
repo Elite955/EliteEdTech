@@ -8,6 +8,7 @@ import {
   Star,
   LayoutDashboard,
   LogOut,
+  MessageCircle,
   User,
   ChevronDown,
   ChevronLeft,
@@ -17,6 +18,8 @@ import { useAuth } from '../auth/useAuth'
 import { api } from '../lib/api'
 import { ProfileDialog } from './ProfileDialog'
 import { PageLoader } from './PageLoader'
+import EliteLoader, { waitForEliteLoader } from './EliteLoader'
+import GlobalChat from './GlobalChat'
 
 const navigation = [
   {
@@ -46,6 +49,8 @@ export function TeacherLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [profileDialogOpen, setProfileDialogOpen] = useState(false)
   const profileButtonRef = useRef<HTMLButtonElement>(null)
@@ -58,6 +63,7 @@ export function TeacherLayout() {
   useEffect(() => {
     setProfileOpen(false)
     setProfileDialogOpen(false)
+    setChatOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
@@ -83,22 +89,28 @@ export function TeacherLayout() {
     }
   }, [])
 
+  function toggleChat() {
+    setProfileOpen(false)
+    setChatOpen((value) => !value)
+  }
+
   async function handleLogout() {
+    const startedAt = performance.now()
+    setProfileOpen(false)
+    setLoggingOut(true)
     try {
       await logout()
-    } catch {
+      await waitForEliteLoader(startedAt)
+    } finally {
       navigate('/sign-in', { replace: true })
-      return
     }
-    navigate('/sign-in', { replace: true })
   }
 
   return (
     <div className={`teacher-shell${collapsed ? ' is-collapsed' : ''}`}>
       <aside className="sidebar" id="teacher-sidebar">
         <div className="sidebar-brand">
-          <div className="brand-logo"><span>e</span></div>
-          {!collapsed && <div><strong>EdTech</strong><small>TEACHER CONSOLE</small></div>}
+          <img className="brand-logo-img" src="/elite-logo-sm.png" alt="Elite" />
           <button
             type="button"
             className="sidebar-collapse icon-button"
@@ -179,7 +191,22 @@ export function TeacherLayout() {
           </Suspense>
         </main>
       </div>
+      {!chatOpen && (
+        <button
+          type="button"
+          className="chat-launcher"
+          aria-label="Open global chat"
+          aria-controls="global-chat"
+          data-ui-sound="open"
+          onClick={toggleChat}
+        >
+          <MessageCircle size={19} />
+          <span>Chat</span>
+        </button>
+      )}
       {profileDialogOpen && <ProfileDialog returnFocusRef={profileButtonRef} onClose={() => setProfileDialogOpen(false)} />}
+      {chatOpen && <GlobalChat onClose={() => setChatOpen(false)} />}
+      {loggingOut && <EliteLoader label="Signing out" />}
     </div>
   )
 }

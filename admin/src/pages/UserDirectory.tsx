@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Download, Plus, Search, UserRound, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import { useSuccessBurst } from '../components/useSuccessBurst'
-import { api, getErrorMessage } from '../lib/api'
+import { api, apiUrl, getErrorMessage } from '../lib/api'
 import { playUiSound } from '../lib/sound'
 
 type Person = {
@@ -133,7 +133,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
   async function exportAccounts() {
     setError('')
     try {
-      const response = await fetch(`/api/admin/${role}s/export`, { credentials: 'include' })
+      const response = await fetch(apiUrl(`/admin/${role}s/export`), { credentials: 'include' })
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null
         throw new Error(payload?.error ?? `Export failed (${response.status}).`)

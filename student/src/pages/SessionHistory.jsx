@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { api, recordAttendance } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 import CompletionEffect from '../components/CompletionEffect'
 import JoinClassDialog from '../components/JoinClassDialog'
@@ -39,6 +39,16 @@ export default function SessionHistory() {
       .then((res) => setSessions(res.sessions || []))
       .catch((e) => setErr(e.message))
   }, [])
+
+  async function openSession(session) {
+    await recordAttendance(session.session_id, 'join')
+    setJoining(session)
+  }
+
+  async function closeSession() {
+    if (joining) await recordAttendance(joining.session_id, 'leave')
+    setJoining(null)
+  }
 
   return (
     <div>
@@ -82,7 +92,7 @@ export default function SessionHistory() {
                         className="btn small"
                         type="button"
                         disabled={Boolean(s.start_at && now < new Date(s.start_at).getTime())}
-                        onClick={() => setJoining(s)}
+                        onClick={() => openSession(s)}
                       >
                         Join class
                       </button>
@@ -101,7 +111,7 @@ export default function SessionHistory() {
           ))}
         </div>
       )}
-      {joining && <JoinClassDialog session={joining} onClose={() => setJoining(null)} />}
+      {joining && <JoinClassDialog session={joining} onClose={closeSession} />}
     </div>
   )
 }

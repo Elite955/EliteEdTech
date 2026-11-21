@@ -1009,3 +1009,143 @@ h3 {
     transform: none;
   }
 }
+
+:root {
+  --paper: #f6efe3;
+  --paper-2: #efe4d2;
+  --paper-3: #f3dcd7;
+  --surface: #fffaf2;
+  --ink: #4a3a34;
+  --ink-2: #6d554e;
+  --muted: #8b766b;
+  --line: #b6887e;
+  --line-2: #96685f;
+  --accent: #f0a6a1;
+  --accent-ink: #d9726f;
+  --accent-soft: #fbe5e2;
+  --night: #7d3535;
+  --night-ink: #fff5f0;
+  --night-soft: #ffe8e2;
+  --night-muted: #e2b0a8;
+  --coral: #e88b86;
+  --coral-soft: #fbe5e2;
+  --mint: #d8a49e;
+  --mint-soft: #f6e8e2;
+  --gold: #d9b38c;
+  --gold-soft: #f5ead9;
+  --lilac: #c9a1a8;
+  --lilac-soft: #f4e6e8;
+  --sky: #d8a7a2;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html,
+body {
+  background: var(--paper) !important;
+  color: var(--ink);
+}
+
+.masthead,
+.statement-section,
+.colophon {
+  background: var(--night) !important;
+  color: var(--night-soft) !important;
+}
+
+.masthead-nav a,
+.brand,
+.statement-section h2,
+.statement-section .kicker,
+.section-head--light h2,
+.section-head--light .kicker {
+  color: var(--night-soft) !important;
+}
+
+.hero::before {
+  background: radial-gradient(circle, color-mix(in oklab, var(--accent) 28%, transparent), transparent 68%);
+}
+
+.btn,
+.portal-actions .btn {
+  background: var(--accent-ink) !important;
+  border-color: var(--accent-ink) !important;
+  color: #ffffff !important;
+}
+
+.btn:hover,
+.portal-actions .btn:hover {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--night-ink) !important;
+}
+
+.btn.ghost,
+.btn.ghost:hover {
+  background: transparent !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-ink) !important;
+}
+
+.btn-light {
+  background: var(--surface) !important;
+  border-color: var(--surface) !important;
+  color: var(--ink) !important;
+}
+
+.btn-light:hover {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--night-ink) !important;
+}
+
+.btn-outline-light {
+  border-color: var(--accent) !important;
+  color: var(--surface) !important;
+}
+
+.badge-coral,
+.badge-mint,
+.portal-card--teacher .portal-list li::before,
+.space-mark--coral,
+.space-mark--lilac,
+.space-mark--sky {
+  color: var(--accent-ink) !important;
+}
+
+.step-card--coral,
+.step-card--mint,
+.step-card--gold {
+  background: var(--paper-2) !important;
+}
+
+.section-head p:last-child,
+.lead,
+.kicker {
+  color: var(--muted) !important;
+}
+
+.brand-logo-img {
+  display: block;
+  width: 100%;
+  max-width: 180px;
+  max-height: 48px;
+  height: auto;
+  object-fit: contain;
+}
+
+.hero-elite-logo {
+  display: block;
+  width: min(420px, 80vw);
+  max-height: 150px;
+  height: auto;
+  margin-bottom: 14px;
+  object-fit: contain;
+}
+
+.colophon .brand-logo-img {
+  display: inline-block;
+  width: auto;
+  max-width: 160px;
+  max-height: 44px;
+  vertical-align: middle;
+}

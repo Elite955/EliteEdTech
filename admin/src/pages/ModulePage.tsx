@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Download, FileText, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, Search, Video, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import { useSuccessBurst } from '../components/useSuccessBurst'
-import { api, getErrorMessage } from '../lib/api'
+import { api, apiUrl, getErrorMessage } from '../lib/api'
 import { playUiSound } from '../lib/sound'
 
 type ModuleRecord = { id: string; title: string; status: string; created_at: string; data: Record<string, unknown> }
@@ -217,7 +217,7 @@ export function ModulePage() {
     setExporting(format)
     setError('')
     try {
-      const response = await fetch(`/api/admin/reports/export?format=${format}`, { credentials: 'include' })
+      const response = await fetch(apiUrl(`/admin/reports/export?format=${format}`), { credentials: 'include' })
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null
         throw new Error(payload?.error ?? `Report download failed (${response.status}).`)

@@ -152,10 +152,12 @@ export default function GlobalChat({ onClose }) {
           {loaded && messages.length === 0 && <div className="empty">No messages yet — say hello.</div>}
           {messages.map((message, index) => {
             const mine = String(message.sender_id) === String(user?.id)
+            const roleLabel = message.sender_role_label || (message.sender_role === 'teacher' ? 'Teacher' : 'Student')
             return (
               <div key={message.id ?? index} className={`msg${mine ? ' mine' : ''}`}>
                 <div className="who">
-                  {message.sender_name || message.sender?.name || 'Student'}{mine ? ' (you)' : ''}
+                  {message.sender_name || message.sender?.name || roleLabel}{mine ? ' (you)' : ''}
+                  {roleLabel && <span className="chat-role">{roleLabel}</span>}
                 </div>
                 {message.content}
                 {message.created_at && (

@@ -315,6 +315,9 @@ CREATE INDEX IF NOT EXISTS managed_records_module_created_at_idx ON managed_reco
 ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS mfa_secret_encrypted TEXT;
 ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS mfa_pending_secret_encrypted TEXT;
 ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS mfa_pending_expires_at TIMESTAMPTZ;
+ALTER TABLE teacher_profiles ADD COLUMN IF NOT EXISTS mfa_secret_encrypted TEXT;
+ALTER TABLE teacher_profiles ADD COLUMN IF NOT EXISTS mfa_pending_secret_encrypted TEXT;
+ALTER TABLE teacher_profiles ADD COLUMN IF NOT EXISTS mfa_pending_expires_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS teacher_availability (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

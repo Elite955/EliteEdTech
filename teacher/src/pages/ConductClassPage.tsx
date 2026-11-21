@@ -22,6 +22,8 @@ export function ConductClassPage() {
   const [acting, setActing] = useState(false)
   const [error, setError] = useState('')
   const [joining, setJoining] = useState(false)
+  const [recordingUrl, setRecordingUrl] = useState('')
+  const [savingRecording, setSavingRecording] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -29,6 +31,7 @@ export function ConductClassPage() {
         `/teacher/sessions/${sessionId}`
       )
       setSession(data.session)
+      setRecordingUrl(data.session.recording_url ?? '')
       setAttendance(data.attendance)
     } catch (err) {
       setError(getErrorMessage(err))
@@ -81,6 +84,22 @@ export function ConductClassPage() {
     }
   }
 
+  const handleSaveRecording = async () => {
+    setSavingRecording(true)
+    setError('')
+    try {
+      await api(`/teacher/sessions/${sessionId}/recording`, {
+        method: 'PATCH',
+        body: JSON.stringify({ url: recordingUrl.trim() || null }),
+      })
+      await load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setSavingRecording(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -103,7 +122,11 @@ export function ConductClassPage() {
   const duration = session.started_at && session.ended_at
     ? Math.round((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000)
     : null
-  const providerName = session.meeting_provider === 'zoom' ? 'Zoom' : 'Google Meet'
+  const providerName = session.meeting_provider === 'zoom'
+    ? 'Zoom'
+    : session.meeting_provider === 'jitsi'
+      ? 'Jitsi Meet'
+      : 'Google Meet'
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -254,6 +277,27 @@ export function ConductClassPage() {
                 📹 View Recording →
               </a>
             </div>
+          )}
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <input
+              type="url"
+              value={recordingUrl}
+              onChange={(event) => setRecordingUrl(event.target.value)}
+              placeholder="Paste an https recording link"
+              disabled={!session.recording_consent}
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-60"
+            />
+            <button
+              type="button"
+              onClick={handleSaveRecording}
+              disabled={savingRecording || !session.recording_consent}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {savingRecording ? 'Saving…' : 'Save link'}
+            </button>
+          </div>
+          {!session.recording_consent && (
+            <p className="mt-2 text-xs text-slate-500">Enable consent before saving a recording link.</p>
           )}
         </div>
 

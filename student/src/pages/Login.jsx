@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Icon } from '../components/icons'
+import EliteLoader, { waitForEliteLoader } from '../components/EliteLoader'
 import { playUiSound } from '../lib/sound'
 
 export default function Login() {
@@ -16,8 +17,9 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const manualSecret = mfa?.otpAuthUrl?.match(/secret=([^&]+)/)?.[1] ?? ''
 
-  const finish = (user) => {
+  const finish = async (user, startedAt) => {
     if (!user) return
+    await waitForEliteLoader(startedAt)
     if (user.roleCode === 'teacher') {
       localStorage.removeItem('edtech_student_user')
       window.location.replace(import.meta.env.VITE_TEACHER_PORTAL_URL || 'http://localhost:5174')
@@ -35,6 +37,7 @@ export default function Login() {
 
   async function submit(e) {
     e.preventDefault()
+    const startedAt = performance.now()
     setBusy(true)
     setError('')
     try {
@@ -46,7 +49,7 @@ export default function Login() {
           otpAuthUrl: res.otpAuthUrl || null
         })
       } else {
-        finish(res.user)
+        await finish(res.user, startedAt)
       }
     } catch (err) {
       setError(err.message || 'Something went wrong')
@@ -58,14 +61,15 @@ export default function Login() {
 
   async function verify(e) {
     e.preventDefault()
+    const startedAt = performance.now()
     setBusy(true)
     setError('')
     try {
       const res = await api.post('/auth/mfa/confirm', { challenge: mfa.challenge, code })
-      finish(res.user)
+      await finish(res.user, startedAt)
     } catch (err) {
       const hint = mfa.setup
-        ? ' If it keeps failing, delete the old EdTech Platform entry in your authenticator app and scan this new QR code.'
+        ? ' If it keeps failing, delete the old Elite Platform entry in your authenticator app and scan this new QR code.'
         : ''
       setError((err.message || 'Something went wrong') + hint)
       playUiSound('error')
@@ -76,11 +80,12 @@ export default function Login() {
 
   async function reverify(e) {
     e.preventDefault()
+    const startedAt = performance.now()
     setBusy(true)
     setError('')
     try {
       const res = await api.post('/auth/mfa/verify', { challenge: mfa.challenge, code })
-      finish(res.user)
+      await finish(res.user, startedAt)
     } catch (err) {
       setError(err.message || 'Something went wrong')
       playUiSound('error')
@@ -91,10 +96,10 @@ export default function Login() {
 
   return (
     <div className="auth-wrap">
+      {busy && <EliteLoader label="Signing in" />}
       <div className="card form-card">
         <div className="auth-brand">
-          <span className="auth-mark" aria-hidden="true"><Icon name="cap" size={26} /></span>
-          <span className="auth-brand-name">EDTECH <small>student portal</small></span>
+          <span className="auth-brand-name"><img className="auth-brand-logo" src="/elite-logo-md.png" alt="Elite" /><small>student portal</small></span>
         </div>
         <h1>{mfa ? (mfa.setup ? 'Set up your authenticator' : 'Verify it’s you') : 'Welcome back'}</h1>
         <p className="page-sub">
@@ -153,22 +158,10 @@ export default function Login() {
                 )}
                 {mfa.otpAuthUrl && manualSecret && (
                   <div style={{ marginTop: 8 }}>
-                    <p style={{ fontSize: 12, marginBottom: 4 }}>
+                    <p className="mfa-secret-hint">
                       Or in OneAuth choose &quot;Or enter code manually&quot; and paste this secret:
                     </p>
-                    <div
-                      style={{
-                        background: '#fff',
-                        color: '#111827',
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        fontFamily: 'monospace',
-                        fontSize: 14,
-                        wordBreak: 'break-all'
-                      }}
-                    >
-                      {manualSecret}
-                    </div>
+                    <div className="mfa-secret">{manualSecret}</div>
                   </div>
                 )}
               </div>

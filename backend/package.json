@@ -4,7 +4,8 @@
   "description": "Express API for the EdTech super admin panel",
   "main": "index.js",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test \"src/**/*.test.js\"",
+    "test:flow": "node scripts/test-flow.mjs",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "db:migrate": "node src/db/migrate.js",

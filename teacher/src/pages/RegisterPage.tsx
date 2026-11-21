@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { GraduationCap, ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { api, getErrorMessage } from '../lib/api'
 import { playUiSound } from '../lib/sound'
 
@@ -62,8 +62,7 @@ export function RegisterPage() {
 
         <div className="auth-card bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
           <div className="auth-brand">
-            <span className="auth-mark"><GraduationCap size={26} /></span>
-            <span className="auth-brand-name">EDTECH <small>teacher portal</small></span>
+            <span className="auth-brand-name"><img className="auth-brand-logo" src="/elite-logo-md.png" alt="Elite" /><small>teacher portal</small></span>
           </div>
           <h1 className="auth-title">Create your account</h1>
           <p className="auth-sub">Teach one-to-one classes on your own schedule.</p>

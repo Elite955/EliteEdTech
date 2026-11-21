@@ -45,7 +45,7 @@ export async function sendPasswordResetEmail(req, { userId, email, actorId }) {
     await transport.sendMail({
       from: SMTP_FROM,
       to: email,
-      subject: 'Reset your EdTech account password',
+      subject: 'Reset your ELITE account password',
       text: `Use this one-time link within 30 minutes to reset your password: ${resetUrl}\n\nIf you did not request this, ignore this email.`,
     });
   } catch (error) {

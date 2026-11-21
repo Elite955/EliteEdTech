@@ -8,7 +8,10 @@ import { AuthContext } from './context'
 interface LoginResponse {
   user?: User
   requiresMfa?: boolean
+  requiresMfaSetup?: boolean
   challenge?: string
+  otpAuthUrl?: string
+  accountName?: string
 }
 
 interface MeResponse {
@@ -47,6 +50,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: 'POST',
       body: JSON.stringify({ email, password, portal: 'teacher' }),
     })
+    if (data.requiresMfaSetup && data.challenge) {
+      return {
+        requiresMfaSetup: true,
+        challenge: data.challenge,
+        otpAuthUrl: data.otpAuthUrl,
+        accountName: data.accountName,
+      }
+    }
     if (data.requiresMfa && data.challenge) {
       return { requiresMfa: true, challenge: data.challenge }
     }
@@ -58,6 +69,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user)
     }
     return {}
+  }, [])
+
+  const confirmMfa = useCallback(async (challenge: string, code: string) => {
+    const data = await api<LoginResponse>('/auth/mfa/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ challenge, code }),
+    })
+    if (data.user) {
+      if (data.user.roleCode !== 'teacher') {
+        redirectToPortal(data.user.roleCode)
+        return
+      }
+      setUser(data.user)
+    }
   }, [])
 
   const verifyMfa = useCallback(async (challenge: string, code: string) => {
@@ -88,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext value={{ user, loading, login, verifyMfa, updateUser, logout }}>
+    <AuthContext value={{ user, loading, login, confirmMfa, verifyMfa, updateUser, logout }}>
       {children}
     </AuthContext>
   )

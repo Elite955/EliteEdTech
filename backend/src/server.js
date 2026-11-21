@@ -164,18 +164,15 @@ io.on('connection', (socket) => {
     socket.join('admin-chat-moderation');
     return;
   }
-  if (socket.data.kind === 'student') {
+  if (socket.data.kind === 'student' || socket.data.kind === 'teacher') {
     socket.join('global');
     socket.emit('chat:ready', { room: 'global' });
-  }
-  if (socket.data.kind === 'student' || socket.data.kind === 'teacher') {
     registerWhiteboardHandlers(socket, pool);
   }
-  if (socket.data.kind !== 'student') return;
+  if (socket.data.kind !== 'student' && socket.data.kind !== 'teacher') return;
 
   socket.on('chat:message', async (payload, callback) => {
     try {
-      if (socket.data.kind !== 'student') return;
       const room = typeof payload?.room === 'string' ? payload.room : '';
       const content = typeof payload?.content === 'string' ? payload.content.trim() : '';
       if (room !== 'global' || content.length < 1 || content.length > 500) {
@@ -184,16 +181,18 @@ io.on('connection', (socket) => {
         return;
       }
       const { rows: senderRows } = await pool.query(
-        `SELECT u.status, sp.age FROM users u LEFT JOIN student_profiles sp ON sp.user_id = u.id WHERE u.id = $1`,
+        `SELECT u.status, u.role, sp.age
+         FROM users u LEFT JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE u.id = $1`,
         [socket.data.userId],
       );
       const sender = senderRows[0];
-      if (!sender || sender.status !== 'active') {
+      if (!sender || sender.status !== 'active' || sender.role !== socket.data.kind) {
         socket.emit('chat:error', { message: 'Your account can no longer send messages.' });
         callback?.({ ok: false });
         return;
       }
-      const needsCensor = sender.age !== null && sender.age >= 10 && sender.age <= 12;
+      const needsCensor = sender.role === 'student' && sender.age !== null && sender.age >= 10 && sender.age <= 12;
       const finalContent = needsCensor ? censorContent(content) : content;
 
       const { rows: inserted } = await pool.query(
@@ -206,6 +205,8 @@ io.on('connection', (socket) => {
         room: 'global',
         sender_id: socket.data.userId,
         sender_name: socket.data.userName,
+        sender_role: sender.role,
+        sender_role_label: sender.role === 'teacher' ? 'Teacher' : 'Student',
         content: finalContent,
         created_at: inserted[0].created_at,
       };
@@ -226,7 +227,7 @@ io.on('connection', (socket) => {
 
 const port = Number(process.env.API_PORT || 4000);
 server.listen(port, () => {
-  console.log(`EdTech admin API listening on http://localhost:${port}`);
+  console.log(`Elite admin API listening on http://localhost:${port}`);
 });
 
 async function shutdown() {

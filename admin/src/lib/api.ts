@@ -10,6 +10,15 @@ export class ApiError extends Error {
   }
 }
 
+const API_ORIGIN = import.meta.env.VITE_API_URL || ''
+
+export function apiUrl(path: string): string {
+  const normalized = path.startsWith('/api/')
+    ? path
+    : `/api${path.startsWith('/') ? path : `/${path}`}`
+  return `${API_ORIGIN}${normalized}`
+}
+
 const unauthenticatedAuthPaths = new Set([
   '/auth/login',
   '/auth/mfa/confirm',
@@ -20,7 +29,7 @@ const unauthenticatedAuthPaths = new Set([
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const apiPath = path.startsWith('/api/') ? path.slice(4) : path
-  const response = await fetch(path.startsWith('/api/') ? path : `/api${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     credentials: 'include',
     headers: {

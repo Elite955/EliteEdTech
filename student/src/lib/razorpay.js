@@ -23,7 +23,7 @@ export async function startRazorpayCheckout(booking, user, { onSuccess } = {}) {
       key: order.key_id,
       amount: order.amount,
       currency: order.currency || 'INR',
-      name: 'EDTECH Platform',
+      name: 'ELITE Platform',
       description: `One-to-one class · Booking #${booking.id}`,
       order_id: order.order_id,
       prefill: { name: user?.name, email: user?.email },

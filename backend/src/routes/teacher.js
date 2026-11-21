@@ -529,6 +529,12 @@ teacherRouter.post('/sessions/:id/start', requireAuthenticatedUser, requireTeach
     if (!rows.length) {
       return res.status(400).json({ error: 'Only a scheduled class session can be started.' });
     }
+    await pool.query(
+      `INSERT INTO attendance_records (session_id, user_id, joined_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (session_id, user_id) DO UPDATE SET joined_at = COALESCE(attendance_records.joined_at, now())`,
+      [row.id, req.auth.id],
+    );
     await writeAudit(req, {
       actorId: req.auth.id,
       event: 'class_session_started',
@@ -573,6 +579,12 @@ teacherRouter.post('/sessions/:id/end', requireAuthenticatedUser, requireTeacher
        WHERE id = $1 AND status IN ('paid', 'approved')`,
       [session.booking_id],
     );
+    await client.query(
+      `INSERT INTO attendance_records (session_id, user_id, left_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (session_id, user_id) DO UPDATE SET left_at = now()`,
+      [session.id, req.auth.id],
+    );
     await client.query('COMMIT');
     await writeAudit(req, {
       actorId: req.auth.id,
@@ -614,6 +626,65 @@ teacherRouter.patch('/sessions/:id/recording-consent', requireAuthenticatedUser,
       details: { consent: parsed.data.consent },
     });
     return res.json({ session: sessionPayload(await loadSession(req.auth.id, req.params.id)) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+const recordingSchema = z.object({
+  url: z.string().trim().url().refine((value) => {
+    try {
+      return ['http:', 'https:'].includes(new URL(value).protocol);
+    } catch {
+      return false;
+    }
+  }, 'Use an http(s) recording link.').nullable(),
+});
+
+teacherRouter.patch('/sessions/:id/recording', requireAuthenticatedUser, requireTeacher, async (req, res, next) => {
+  try {
+    if (!idSchema.safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const parsed = recordingSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return validationError(res, parsed);
+
+    const { rows } = await pool.query(
+      `UPDATE class_sessions cs
+       SET recording_url = $3
+       FROM bookings b
+       WHERE cs.id = $1 AND cs.booking_id = b.id AND b.teacher_id = $2
+         AND cs.recording_consent = true AND cs.status <> 'cancelled'
+       RETURNING cs.id`,
+      [req.params.id, req.auth.id, parsed.data.url],
+    );
+    if (!rows.length) {
+      return res.status(409).json({ error: 'Enable recording consent for this class before saving a link.' });
+    }
+    await writeAudit(req, {
+      actorId: req.auth.id,
+      event: parsed.data.url ? 'recording_link_saved' : 'recording_link_removed',
+      module: 'live_classes',
+      targetId: req.params.id,
+    });
+    return res.json({ session: sessionPayload(await loadSession(req.auth.id, req.params.id)) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+teacherRouter.get('/chat/messages', requireAuthenticatedUser, requireTeacher, async (req, res, next) => {
+  try {
+    const room = req.query.room ?? 'global';
+    if (room !== 'global') return res.status(400).json({ error: 'Only the global room is open to teachers.' });
+    const { rows } = await pool.query(
+      `SELECT m.id, m.sender_id, u.name AS sender_name, u.role AS sender_role, m.content, m.created_at
+       FROM chat_messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.room = $1 AND m.status = 'visible'
+       ORDER BY m.created_at DESC LIMIT 50`,
+      [room],
+    );
+    return res.json({ messages: rows.reverse() });
   } catch (error) {
     return next(error);
   }

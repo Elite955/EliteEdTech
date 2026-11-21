@@ -51,11 +51,10 @@ export default function Register() {
     <div className="auth-wrap">
       <div className="card form-card">
         <div className="auth-brand">
-          <span className="auth-mark" aria-hidden="true"><Icon name="cap" size={26} /></span>
-          <span className="auth-brand-name">EDTECH <small>student portal</small></span>
+          <span className="auth-brand-name"><img className="auth-brand-logo" src="/elite-logo-md.png" alt="Elite" /><small>student portal</small></span>
         </div>
         <h1>Create your account</h1>
-        <p className="page-sub">Join EDTECH and book your first one-to-one lesson.</p>
+        <p className="page-sub">Join ELITE and book your first one-to-one lesson.</p>
 
         {error && <div className="alert error">{error}</div>}
         {done && (

@@ -15,6 +15,7 @@ const AdminDirectory = lazy(() => import('./pages/AdminDirectory').then(({ Admin
 const MeetingChecks = lazy(() => import('./pages/MeetingChecks').then(({ MeetingChecks }) => ({ default: MeetingChecks })))
 const ActiveSessionsPage = lazy(() => import('./pages/ActiveSessionsPage').then(({ ActiveSessionsPage }) => ({ default: ActiveSessionsPage })))
 const ModulePage = lazy(() => import('./pages/ModulePage').then(({ ModulePage }) => ({ default: ModulePage })))
+const ChatMonitor = lazy(() => import('./pages/ChatMonitor').then(({ ChatMonitor }) => ({ default: ChatMonitor })))
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth()
@@ -58,6 +59,7 @@ function App() {
               <Route path="/admins" element={<AdminDirectory />} />
               <Route path="/meeting-checks" element={<MeetingChecks />} />
               <Route path="/sessions" element={<ActiveSessionsPage />} />
+              <Route path="/chat-monitor" element={<ChatMonitor />} />
               <Route path="/modules/:module" element={<ModulePage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import EliteLoader, { waitForEliteLoader } from './EliteLoader'
 import { getErrorMessage } from '../lib/api'
 
 type NavItem = { label: string; path: string; module: string; icon: LucideIcon; superAdminOnly?: boolean }
@@ -24,7 +25,8 @@ const navigation: NavGroup[] = [
     { label: 'Bookings', path: '/modules/bookings', module: 'bookings', icon: CalendarDays },
     { label: 'Live classes', path: '/modules/live_classes', module: 'live_classes', icon: MonitorPlay },
     { label: 'Meeting checks', path: '/meeting-checks', module: 'live_classes', icon: CalendarClock },
-    { label: 'Chat moderation', path: '/modules/chat_moderation', module: 'chat_moderation', icon: MessageSquareWarning },
+    { label: 'Live chat monitor', path: '/chat-monitor', module: 'chat_moderation', icon: MessageSquareWarning },
+    { label: 'Chat records', path: '/modules/chat_moderation', module: 'chat_moderation', icon: MessageSquareWarning },
     { label: 'Support & complaints', path: '/modules/support', module: 'support', icon: LifeBuoy },
   ] },
   { label: 'Finance', items: [
@@ -62,7 +64,8 @@ const pageTitles: Record<string, string> = {
   bookings: 'Bookings',
   live_classes: 'Live classes',
   'meeting-checks': 'Meeting checks',
-  chat_moderation: 'Chat moderation',
+  chat_moderation: 'Chat records',
+  'chat-monitor': 'Live chat monitor',
   support: 'Support & complaints',
   transactions: 'Transactions',
   refunds: 'Refunds',
@@ -88,6 +91,7 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const currentPage = location.pathname.split('/').filter(Boolean).pop() ?? 'dashboard'
   const title = pageTitles[currentPage] ?? 'Dashboard'
@@ -95,11 +99,17 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
   const PageIcon = activeItem?.icon ?? LayoutDashboard
 
   async function handleLogout() {
+    const startedAt = performance.now()
+    setProfileOpen(false)
+    setLoggingOut(true)
     try {
       await logout()
+      await waitForEliteLoader(startedAt)
       navigate('/sign-in', { replace: true })
     } catch (error) {
       window.alert(getErrorMessage(error))
+    } finally {
+      setLoggingOut(false)
     }
   }
 
@@ -107,8 +117,7 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
     <div className={`admin-shell${collapsed ? ' is-collapsed' : ''}`}>
       <aside className="sidebar" id="admin-sidebar">
         <div className="sidebar-brand">
-          <div className="brand-logo"><span>e</span></div>
-          {!collapsed && <div><strong>EdTech</strong><small>ADMIN CONSOLE</small></div>}
+          <img className="brand-logo-img" src="/elite-logo-sm.png" alt="Elite" />
           <button type="button" className="sidebar-collapse icon-button" aria-controls="admin-sidebar" aria-expanded={!collapsed} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
           </button>
@@ -150,6 +159,7 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
         </header>
         <main className="page-content">{children ?? <Outlet />}</main>
       </div>
+      {loggingOut && <EliteLoader label="Signing out" />}
     </div>
   )
 }

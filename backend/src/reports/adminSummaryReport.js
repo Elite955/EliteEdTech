@@ -77,7 +77,7 @@ export function createPdfReport(rows, generatedAt = new Date()) {
     document.on('data', (chunk) => chunks.push(chunk));
     document.once('error', reject);
     document.once('end', () => resolve(Buffer.concat(chunks)));
-    document.fontSize(20).text('EdTech Admin Summary');
+    document.fontSize(20).text('Elite Admin Summary');
     document.moveDown(0.5).fontSize(10).fillColor('#555555').text(`Generated ${generatedAt.toISOString()}`);
     document.moveDown().fillColor('#111111').fontSize(12);
     for (const row of rows) {
