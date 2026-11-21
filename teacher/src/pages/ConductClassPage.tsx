@@ -103,6 +103,7 @@ export function ConductClassPage() {
   const duration = session.started_at && session.ended_at
     ? Math.round((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 60000)
     : null
+  const providerName = session.meeting_provider === 'zoom' ? 'Zoom' : 'Google Meet'
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -118,7 +119,7 @@ export function ConductClassPage() {
             Conduct Class
           </h2>
           <p className="text-slate-500 mt-1">
-            {session.student_name ?? 'Student'} · {session.meeting_provider === 'zoom' ? 'Zoom' : 'Google Meet'}
+            {session.student_name ?? 'Student'} · {providerName}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -173,7 +174,7 @@ export function ConductClassPage() {
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 border border-blue-200 transition-colors"
               >
                 <ExternalLink size={16} />
-                Open Zoom directly
+                Open {providerName} directly
               </a>
             )}
             {!session.meeting_url && (

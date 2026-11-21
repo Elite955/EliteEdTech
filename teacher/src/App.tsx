@@ -14,6 +14,7 @@ const SessionsPage = lazy(() => import('./pages/SessionsPage').then(({ SessionsP
 const SchedulePage = lazy(() => import('./pages/SchedulePage').then(({ SchedulePage }) => ({ default: SchedulePage })))
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage').then(({ FeedbackPage }) => ({ default: FeedbackPage })))
 const ConductClassPage = lazy(() => import('./pages/ConductClassPage').then(({ ConductClassPage }) => ({ default: ConductClassPage })))
+const WhiteboardOnlyPage = lazy(() => import('./pages/WhiteboardOnlyPage').then(({ WhiteboardOnlyPage }) => ({ default: WhiteboardOnlyPage })))
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth()
@@ -42,6 +43,7 @@ export default function App() {
           <Routes>
             <Route path="/sign-in" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/classroom/whiteboard/:sessionId" element={<WhiteboardOnlyPage />} />
             <Route element={<ProtectedRoutes />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />

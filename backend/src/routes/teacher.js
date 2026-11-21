@@ -478,7 +478,7 @@ teacherRouter.post('/sessions/:id/meeting', requireAuthenticatedUser, requireTea
       return res.status(400).json({ error: 'This class is no longer available to join.' });
     }
 
-    const result = await ensureSessionMeeting(row.id);
+    const result = await ensureSessionMeeting(row.id, { allowBeforeStart: true });
     const httpStatus = result.status === 'not_found' ? 404
       : result.status === 'not_configured' ? 503
         : result.status === 'failed' ? 502

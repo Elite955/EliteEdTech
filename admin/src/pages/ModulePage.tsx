@@ -7,13 +7,23 @@ import { api, getErrorMessage } from '../lib/api'
 import { playUiSound } from '../lib/sound'
 
 type ModuleRecord = { id: string; title: string; status: string; created_at: string; data: Record<string, unknown> }
+type OfflinePaymentResult = {
+  meetingStatus: string
+  meetingError?: string | null
+  missingKeys?: string[]
+  configuration?: {
+    email?: { missingKeys?: string[] }
+    whatsapp?: { missingKeys?: string[] }
+  } | null
+  delivery: { channel: string; status: string; error?: string | null }[]
+}
 
 const moduleInfo: Record<string, { title: string; description: string; editable?: boolean; statuses?: string[] }> = {
-  bookings: { title: 'Bookings', description: 'Review booking requests, class schedules, and booking status.', statuses: ['pending', 'approved', 'rejected', 'paid', 'completed', 'cancelled'] },
-  live_classes: { title: 'Live classes', description: 'Monitor scheduled and ongoing sessions. Test-account Zoom meeting creation is opt-in and disabled in production.', statuses: ['scheduled', 'ongoing', 'completed', 'cancelled'] },
+  bookings: { title: 'Bookings', description: 'Review booking requests and record verified bank transfers.', statuses: ['pending', 'approved', 'rejected', 'paid', 'completed', 'cancelled'] },
+  live_classes: { title: 'Live classes', description: 'Monitor scheduled and ongoing sessions. Meeting-link creation is limited to development/test mode.', statuses: ['scheduled', 'ongoing', 'completed', 'cancelled'] },
   chat_moderation: { title: 'Global chat moderation', description: 'Review messages that authorized moderators are permitted to access.', statuses: ['visible', 'hidden', 'deleted'] },
   support: { title: 'Support & complaints', description: 'Track user issues, prioritize complaints, and update ticket status.', statuses: ['open', 'in_progress', 'resolved', 'closed'], editable: true },
-  transactions: { title: 'Transactions', description: 'Review payment records. Finance Admins can request a full Razorpay test refund for eligible payments.' },
+  transactions: { title: 'Transactions', description: 'Review payment records and record verified bank transfers. Finance Admins can request eligible Razorpay test refunds.' },
   refunds: { title: 'Refunds', description: 'Review full-refund requests sent through explicitly enabled Razorpay test mode.' },
   payouts: { title: 'Teacher payouts', description: 'Payouts are not initiated by the admin console. Connect the approved financial provider before enabling payouts.' },
   revenue_analytics: { title: 'Revenue analytics', description: 'Revenue summaries are based on recorded payment rows; no external payment data is fabricated.' },
@@ -56,9 +66,13 @@ export function ModulePage() {
   const [editValue, setEditValue] = useState('')
   const [form, setForm] = useState({ title: '', status: 'active', description: '' })
   const [whatsAppForm, setWhatsAppForm] = useState({ to: '', body: '' })
+  const [recordingBooking, setRecordingBooking] = useState<ModuleRecord | null>(null)
+  const [transactionReference, setTransactionReference] = useState('')
+  const [paymentVerified, setPaymentVerified] = useState(false)
   const [exporting, setExporting] = useState('')
   const canEdit = can(module, ['live_classes', 'chat_moderation', 'configuration', 'maintenance'].includes(module) ? 'manage' : 'edit')
   const canRefund = module === 'transactions' && can('refunds', 'manage')
+  const canRecordPayment = module === 'bookings' && can('transactions', 'record_payment')
   const canCreateMeeting = module === 'live_classes' && can('live_classes', 'manage')
   const canRefreshRefund = module === 'refunds' && can('refunds', 'manage')
   const canRefreshNotification = module === 'notifications' && can('notifications', 'manage')
@@ -84,6 +98,45 @@ export function ModulePage() {
     } catch (requestError) { setError(getErrorMessage(requestError)) }
     finally { setLoading(false) }
   }, [fetchRecords, info])
+
+  async function recordBankTransfer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!recordingBooking || !paymentVerified) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api<OfflinePaymentResult>(`/admin/bookings/${recordingBooking.id}/record-bank-transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ transactionReference }),
+      })
+      const missingKeys = [
+        ...(result.missingKeys ?? []),
+        ...(result.configuration?.email?.missingKeys ?? []),
+        ...(result.configuration?.whatsapp?.missingKeys ?? []),
+      ]
+      if (!['created', 'existing'].includes(result.meetingStatus)) {
+        const missing = missingKeys.length ? ` Missing setup: ${[...new Set(missingKeys)].join(', ')}.` : ''
+        setNotice(`Payment recorded. Meeting link status: ${result.meetingStatus.replaceAll('_', ' ')}.${missing} ${result.meetingError ?? ''}`.trim())
+      } else {
+        const delivery = ['email', 'whatsapp'].map((channel) => {
+          const item = result.delivery.find((entry) => entry.channel === channel)
+          const error = item?.error ? ` (${item.error})` : ''
+          return `${channel === 'email' ? 'Email' : 'WhatsApp'}: ${item?.status ?? 'not sent'}${error}`
+        })
+        const missing = missingKeys.length ? ` Missing setup: ${[...new Set(missingKeys)].join(', ')}.` : ''
+        setNotice(`Payment recorded and meeting link created. ${delivery.join(' · ')}.${missing} ${result.meetingError ?? ''}`.trim())
+        celebrate('Bank transfer recorded')
+      }
+      setRecordingBooking(null)
+      setTransactionReference('')
+      setPaymentVerified(false)
+      await load()
+    } catch (requestError) {
+      playUiSound('error')
+      setError(getErrorMessage(requestError))
+    } finally { setSaving(false) }
+  }
 
   useEffect(() => {
     if (!info) return
@@ -246,14 +299,14 @@ export function ModulePage() {
   }
 
   async function createTestMeeting(item: ModuleRecord) {
-    if (!window.confirm(`Create a Zoom meeting in the configured test account for "${item.title}"?`)) return
+    if (!window.confirm(`Create a meeting link for "${item.title}" using the configured provider?`)) return
     setSaving(true)
     setError('')
     setNotice('')
     try {
       const result = await api<{ joinUrl: string }>(`/admin/live-classes/${item.id}/test-meeting`, { method: 'POST' })
-      setNotice(`Test meeting created: ${result.joinUrl}`)
-      celebrate('Test meeting ready')
+      setNotice(`Meeting link created: ${result.joinUrl}`)
+      celebrate('Meeting link ready')
       await load()
     } catch (requestError) {
       playUiSound('error')
@@ -263,7 +316,7 @@ export function ModulePage() {
 
   if (!info) return <div className="alert alert-error">This admin module is not recognized.</div>
   const canCreate = info.editable && editableModules.has(module) && can(module, 'create')
-  const hasRowActions = canRefund || canCreateMeeting || canRefreshRefund || canRefreshNotification
+  const hasRowActions = canRefund || canRecordPayment || canCreateMeeting || canRefreshRefund || canRefreshNotification
 
   return (
     <div className="module-page">
@@ -301,11 +354,12 @@ export function ModulePage() {
                 <td><span className={`status-pill status-${item.status}`}>{item.status.replaceAll('_', ' ')}</span></td>
                 <td><div className="record-details">{Object.entries(item.data ?? {}).slice(0, 4).map(([key, value]) => <span key={key}><b>{key.replaceAll(/([A-Z])/g, ' $1').replaceAll('_', ' ')}:</b> {readableValue(value)}</span>)}</div></td>
                 <td>{item.created_at ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(item.created_at)) : '—'}</td>
-                {canEdit && info.statuses && <td className="align-right"><select className="table-select" aria-label={`Update status for ${item.title}`} value={item.status} onChange={(event) => void changeStatus(item, event.target.value)}>{info.statuses.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}</select></td>}
+                {canEdit && info.statuses && <td className="align-right">{item.status === 'paid' && module === 'bookings' ? <span className="table-secondary">Payment recorded</span> : <select className="table-select" aria-label={`Update status for ${item.title}`} value={item.status} onChange={(event) => void changeStatus(item, event.target.value)}>{info.statuses.filter((status) => module !== 'bookings' || status !== 'paid').map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}</select>}</td>}
                 {canEdit && (module === 'configuration' || module === 'maintenance') && <td className="align-right"><button className="table-action" onClick={() => { setEditingItem(item); setEditValue(JSON.stringify(item.data?.value ?? null, null, 2)); setError('') }}><Pencil size={12} /> Edit value</button></td>}
                 {hasRowActions && <td className="align-right">
                   {canRefund && item.status === 'succeeded' && item.data?.provider === 'razorpay' && Boolean(item.data?.providerTransactionId) && <button className="table-action danger-action" disabled={saving} onClick={() => void requestTestRefund(item)}><RotateCcw size={12} /> Full test refund</button>}
-                  {canCreateMeeting && item.status === 'scheduled' && !item.data?.meetingUrl && !['creating', 'created', 'unknown'].includes(String(item.data?.meetingCreationStatus)) && <button className="table-action" disabled={saving} onClick={() => void createTestMeeting(item)}><Video size={12} /> Create test meeting</button>}
+                  {canRecordPayment && item.status === 'approved' && <button className="table-action" disabled={saving} onClick={() => { setRecordingBooking(item); setTransactionReference(''); setPaymentVerified(false); setError('') }}>Record bank transfer</button>}
+                  {canCreateMeeting && item.status === 'scheduled' && !item.data?.meetingUrl && !['creating', 'created', 'unknown'].includes(String(item.data?.meetingCreationStatus)) && <button className="table-action" disabled={saving} onClick={() => void createTestMeeting(item)}><Video size={12} /> Create meeting link</button>}
                   {canRefreshRefund && ['pending', 'unknown'].includes(item.status) && Boolean(item.data?.providerRefundId) && <button className="table-action" disabled={saving} onClick={() => void refreshRefundStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
                   {canRefreshNotification && ['queued', 'unknown'].includes(item.status) && Boolean(item.data?.providerId) && <button className="table-action" disabled={saving} onClick={() => void refreshWhatsAppStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
                 </td>}
@@ -325,6 +379,27 @@ export function ModulePage() {
               <small>Only the setting type and range supported by the server will be accepted.</small>
               {error && <div role="alert" className="form-error">{error}</div>}
               <div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => setEditingItem(null)}>Cancel</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save setting'}</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+      {recordingBooking && (
+        <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setRecordingBooking(null) }}>
+          <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="record-bank-transfer-title">
+            <div className="dialog-heading">
+              <div><p className="eyebrow">OFFLINE PAYMENT</p><h3 id="record-bank-transfer-title">Record bank transfer</h3></div>
+              <button className="icon-button" aria-label="Close dialog" disabled={saving} onClick={() => setRecordingBooking(null)}><X size={19} /></button>
+            </div>
+            <form className="dialog-form" onSubmit={(event) => void recordBankTransfer(event)}>
+              <p>{recordingBooking.title} · Rs. {readableValue(recordingBooking.data?.amount)}</p>
+              <label>Bank transaction reference<input required minLength={3} maxLength={128} value={transactionReference} onChange={(event) => setTransactionReference(event.target.value)} /></label>
+              <label className="check-label"><input type="checkbox" checked={paymentVerified} onChange={(event) => setPaymentVerified(event.target.checked)} /> I verified this transfer was received.</label>
+              <small>Recording is permanent and audited. If meeting, email, or WhatsApp test setup is missing, payment will still be recorded and delivery can be retried from Meeting checks.</small>
+              {error && <div role="alert" className="form-error">{error}</div>}
+              <div className="dialog-actions">
+                <button type="button" className="secondary-button" disabled={saving} onClick={() => setRecordingBooking(null)}>Cancel</button>
+                <button type="submit" className="primary-button" disabled={saving || !paymentVerified || transactionReference.trim().length < 3}>{saving ? 'Recording…' : 'Confirm payment'}</button>
+              </div>
             </form>
           </section>
         </div>

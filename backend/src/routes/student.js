@@ -6,6 +6,7 @@ import { requireAuthenticatedUser } from '../security/authMiddleware.js';
 import { writeAudit } from '../security/audit.js';
 import { createOrder, publicKeyId, razorpayConfigured, verifyPaymentSignature, verifyWebhookSignature } from '../payments/razorpay.js';
 import { ensureSessionMeeting } from '../meetings/service.js';
+import { selectedMeetingProviderId } from '../meetings/provider.js';
 import { sendBookingDetails } from '../notifications/notifier.js';
 
 export const studentRouter = Router();
@@ -367,8 +368,8 @@ async function markBookingPaid(req, { bookingId, orderId, paymentId }) {
 
   const { rows: sessionRows } = await pool.query(
     `INSERT INTO class_sessions (booking_id, meeting_provider, meeting_url, status)
-     VALUES ($1, 'zoom', $2, 'scheduled') RETURNING id, meeting_url`,
-    [booking.id, null],
+     VALUES ($1, $2, $3, 'scheduled') RETURNING id, meeting_url`,
+    [booking.id, selectedMeetingProviderId(), null],
   );
   const session = sessionRows[0];
 
@@ -403,6 +404,7 @@ async function notifyPaidBooking(booking) {
     endTime,
     amount: Number(booking.amount),
     meetingUrl: sessionRows[0]?.meeting_url ?? null,
+    directMeetingLinkForStudent: true,
   });
 }
 

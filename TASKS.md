@@ -30,7 +30,7 @@ These decisions are intentionally left open. Ask the user and record their answe
 | 1 | Which database? (MongoDB / PostgreSQL / Firebase) | MongoDB |
 | 2 | Which backend framework? (Node.js + Express / Next.js API routes) | Node.js + Express |
 | 3 | Frontend framework? (plain HTML/CSS/JS / React) | React |
-| 4 | Live classes: **Google Meet** or **Zoom**? (links are generated per session) | Google Meet |
+| 4 | Live-class provider for new links (links are generated per session) | Google Meet; preserve existing Zoom links |
 | 5 | Payment gateway: Razorpay in **test mode** or live keys? | Test mode |
 | 6 | Notification provider for WhatsApp & Email (e.g., Twilio, Meta API, Nodemailer/SMTP) | Nodemailer (email) + Twilio sandbox (WhatsApp) |
 | 7 | Real-time chat transport (Socket.IO / native WebSockets) | Socket.IO |
@@ -46,7 +46,7 @@ These decisions are intentionally left open. Ask the user and record their answe
 - **Students** book **hourly-charged** slots with teachers.
 - Teachers set availability; students request class timings; the teacher approves.
 - Approved bookings are paid via **Razorpay** (payment gateway), then confirmed.
-- Live classes happen on **Google Meet or Zoom** (agent asks which — see Step 0).
+- New live-class links use **Google Meet**; existing Zoom links remain valid.
 - Every session has **attendance & session logs**, and **recordings are made only with consent**.
 - Students get a **live chat community** (global chat) built on a **publish–subscribe model**.
 - Chat is **age-censored for students aged 10, 11, 12**.
@@ -193,7 +193,7 @@ You own `teacher/` only. You **consume** `shared/api-contract.md` — never edit
 - [ ] **Hourly charge configuration** — set/update **hourly rate** per subject; the booking amount = hours × rate (amount comes from the API, you display it)
 - [ ] **View Booking Queue** — pending requests from students with requested timings
 - [ ] **Accept / Reject Requests** — approve or reject; on approval the platform routes to Razorpay (Bhuvan's flow) — you just show status
-- [ ] **Conduct Classes** — start session page with the **Google Meet or Zoom** link (ask user which — Step 0 #4); one-to-one class view; class start/end triggers attendance logging via API
+- [ ] **Conduct Classes** — start session page with the class's provider-specific meeting link; one-to-one class view; class start/end triggers attendance logging via API
 - [ ] **Attendance & Session Logs** — session summary (join/leave times, duration) fetched from API
 - [ ] **Recording (with consent)** — toggle recording consent per session; recordings are stored/managed by the backend — you display status & links
 - [ ] **View Student Feedback** — read-only feedback & testimonials submitted by your students
@@ -201,7 +201,7 @@ You own `teacher/` only. You **consume** `shared/api-contract.md` — never edit
 ### Definition of done (Ashish)
 
 - Teacher can create availability, receive a queued request, accept it, and see it move to payment/confirmed states.
-- A session page opens with the Meet/Zoom link and logs attendance on start/end.
+- A session page opens with the meeting link and logs attendance on start/end.
 - Feedback submitted by Vinay (in a demo) is visible here.
 - Nothing outside `teacher/` was modified; API contract was consumed, not changed.
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { api } from '../lib/api'
 import { redirectToPortal } from '../lib/portals'
+import { disconnectSocket } from '../lib/socket'
 import type { User } from '../lib/types'
 import { AuthContext } from './context'
 
@@ -36,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetchMe()
-    const onExpired = () => { setUser(null); setLoading(false) }
+    const onExpired = () => { disconnectSocket(); setUser(null); setLoading(false) }
     window.addEventListener('edtech:session-expired', onExpired)
     return () => window.removeEventListener('edtech:session-expired', onExpired)
   }, [fetchMe])
@@ -81,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api('/auth/logout', { method: 'POST' })
     } finally {
+      disconnectSocket()
       setUser(null)
     }
   }, [])

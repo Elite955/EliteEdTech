@@ -9,7 +9,7 @@ import { sendPasswordResetEmail } from '../security/passwordReset.js';
 import { createFullRefund, getRefundStatus, isRazorpayTestConfigured } from '../integrations/razorpay.js';
 import { getWhatsAppMessageStatus, isAllowedTwilioTestRecipient, isTwilioSandboxConfigured, sendWhatsAppTestMessage } from '../integrations/twilio.js';
 import { ProviderError } from '../integrations/providerError.js';
-import { createTestZoomMeeting, isZoomTestConfigured } from '../integrations/zoom.js';
+import { createSelectedMeeting, meetingProviderConfigurationStatus, selectedMeetingProviderId } from '../meetings/provider.js';
 import { createPdfReport, createXlsxReport, getAdminSummaryRows } from '../reports/adminSummaryReport.js';
 import { ensureSessionMeeting, loadMeetingChecks, sendSessionJoinDetails } from '../meetings/service.js';
 
@@ -527,8 +527,12 @@ adminRouter.get('/notifications/:id/test-status', requireAdmin, requirePermissio
 adminRouter.post('/live-classes/:id/test-meeting', requireAdmin, requirePermission('live_classes', 'manage'), providerActionLimiter, async (req, res, next) => {
   const sessionId = z.string().uuid().safeParse(req.params.id);
   if (!sessionId.success) return validationError(res, sessionId.error);
-  if (!isZoomTestConfigured()) {
-    return res.status(503).json({ error: 'Zoom meeting creation is disabled. Configure a test account and enable test mode.' });
+  const providerConfiguration = meetingProviderConfigurationStatus({ testModeOnly: true });
+  if (!providerConfiguration.configured) {
+    return res.status(503).json({
+      error: `${providerConfiguration.title} link creation is disabled.`,
+      missingKeys: providerConfiguration.missingKeys,
+    });
   }
   try {
     const client = await pool.connect();
@@ -536,8 +540,7 @@ adminRouter.post('/live-classes/:id/test-meeting', requireAdmin, requirePermissi
     try {
       await client.query('BEGIN');
       const result = await client.query(
-        `SELECT cs.id, cs.status, cs.meeting_url, cs.meeting_creation_status,
-                b.id AS booking_id, b.starts_at, b.ends_at
+        `SELECT cs.id, cs.status, cs.meeting_url, cs.meeting_creation_status, b.starts_at
          FROM class_sessions cs JOIN bookings b ON b.id = cs.booking_id
          WHERE cs.id = $1 FOR UPDATE OF cs`,
         [sessionId.data],
@@ -559,17 +562,11 @@ adminRouter.post('/live-classes/:id/test-meeting', requireAdmin, requirePermissi
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'A test meeting can only be created before the class start time.' });
       }
-      const durationMinutes = Math.ceil((new Date(session.ends_at) - new Date(session.starts_at)) / 60000);
-      if (durationMinutes < 1 || durationMinutes > 480) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: "The scheduled class duration is outside Zoom's supported range." });
-      }
       await client.query(
         `UPDATE class_sessions SET meeting_creation_status = 'creating' WHERE id = $1`,
         [session.id],
       );
       await client.query('COMMIT');
-      session.durationMinutes = durationMinutes;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -577,27 +574,129 @@ adminRouter.post('/live-classes/:id/test-meeting', requireAdmin, requirePermissi
 
     let meeting;
     try {
-      meeting = await createTestZoomMeeting({
-        topic: `EdTech class ${session.booking_id}`,
-        startTime: new Date(session.starts_at).toISOString(),
-        durationMinutes: session.durationMinutes,
-      });
+      meeting = await createSelectedMeeting({ testModeOnly: true });
     } catch (error) {
       if (!(error instanceof ProviderError)) return next(error);
       const status = error.outcomeUncertain ? 'unknown' : 'failed';
       await pool.query(`UPDATE class_sessions SET meeting_creation_status = $2 WHERE id = $1`, [session.id, status]);
-      await writeAudit(req, { event: 'zoom_test_meeting_requested', module: 'live_classes', targetId: session.id, details: { status } });
+      await writeAudit(req, { event: 'meeting_test_link_requested', module: 'live_classes', targetId: session.id, details: { provider: providerConfiguration.id, status } });
       return res.status(error.status).json({ error: error.message, status });
     }
     await pool.query(
       `UPDATE class_sessions
-       SET meeting_provider = 'zoom', meeting_url = $2, meeting_creation_status = 'created'
+       SET meeting_provider = $2, meeting_url = $3, meeting_creation_status = 'created'
        WHERE id = $1 AND meeting_creation_status = 'creating'`,
-      [session.id, meeting.joinUrl],
+      [session.id, meeting.provider, meeting.joinUrl],
     );
-    await writeAudit(req, { event: 'zoom_test_meeting_requested', module: 'live_classes', targetId: session.id, details: { status: 'created' } });
+    await writeAudit(req, { event: 'meeting_test_link_requested', module: 'live_classes', targetId: session.id, details: { provider: meeting.provider, status: 'created' } });
     return res.status(201).json({ id: meeting.id, status: 'created', joinUrl: meeting.joinUrl });
   } catch (error) { return next(error); }
+});
+
+adminRouter.post('/bookings/:id/record-bank-transfer', requireAdmin, requirePermission('transactions', 'record_payment'), accountActionLimiter, async (req, res, next) => {
+  const bookingId = z.string().uuid().safeParse(req.params.id);
+  if (!bookingId.success) return res.status(404).json({ error: 'Booking not found.' });
+  const input = z.object({
+    transactionReference: z.string().trim().min(3).max(128),
+  }).safeParse(req.body);
+  if (!input.success) return validationError(res, input.error);
+
+  const client = await pool.connect();
+  let payment;
+  let session;
+  try {
+    await client.query('BEGIN');
+    const bookingResult = await client.query(
+      `SELECT id, student_id, status, starts_at, ends_at, amount
+       FROM bookings WHERE id = $1 FOR UPDATE`,
+      [bookingId.data],
+    );
+    if (!bookingResult.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Booking not found.' });
+    }
+    const booking = bookingResult.rows[0];
+    if (booking.status !== 'approved') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Only an approved, unpaid booking can have an offline payment recorded.' });
+    }
+    const existingPayment = await client.query(
+      `SELECT id FROM payments WHERE booking_id = $1 AND status = 'succeeded' LIMIT 1`,
+      [booking.id],
+    );
+    if (existingPayment.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'This booking already has a successful payment.' });
+    }
+
+    const paymentResult = await client.query(
+      `INSERT INTO payments
+         (booking_id, student_id, provider, provider_transaction_id, recorded_by, amount, status)
+       VALUES ($1, $2, 'bank_transfer', $3, $4, $5, 'succeeded')
+       RETURNING id, amount, provider_transaction_id`,
+      [booking.id, booking.student_id, input.data.transactionReference, req.auth.id, booking.amount],
+    );
+    payment = paymentResult.rows[0];
+    const bookingUpdate = await client.query(
+      `UPDATE bookings SET status = 'paid' WHERE id = $1 AND status = 'approved' RETURNING id`,
+      [booking.id],
+    );
+    if (!bookingUpdate.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'The booking status changed. Refresh and verify the payment before retrying.' });
+    }
+    const sessionResult = await client.query(
+      `INSERT INTO class_sessions (booking_id, meeting_provider, status)
+       VALUES ($1, $2, 'scheduled') RETURNING id`,
+      [booking.id, selectedMeetingProviderId()],
+    );
+    session = sessionResult.rows[0];
+    await client.query(
+      `INSERT INTO audit_logs (actor_id, event, module, target_id, ip_address, user_agent, details)
+       VALUES ($1, 'bank_transfer_recorded', 'transactions', $2, $3, $4, $5)`,
+      [
+        req.auth.id,
+        payment.id,
+        req.ip,
+        req.get('user-agent') ?? null,
+        { bookingId: booking.id, transactionReference: payment.provider_transaction_id, amount: Number(payment.amount) },
+      ],
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'That bank transaction reference has already been recorded.' });
+    }
+    return next(error);
+  } finally {
+    client.release();
+  }
+
+  try {
+    const joinDetails = await sendSessionJoinDetails(session.id, {
+      allowBeforeStart: true,
+      testModeOnly: true,
+      directMeetingLinkForStudent: true,
+      studentOnly: true,
+    });
+    return res.status(201).json({
+      payment: { id: payment.id, status: 'succeeded', transactionReference: payment.provider_transaction_id },
+      meetingStatus: joinDetails.meetingStatus ?? (joinDetails.session?.meeting_url ? 'existing' : 'not_created'),
+      meetingError: joinDetails.error ?? null,
+      missingKeys: joinDetails.missingKeys ?? [],
+      configuration: joinDetails.configuration ?? null,
+      delivery: joinDetails.delivery ?? [],
+    });
+  } catch (error) {
+    console.error('Offline payment meeting notification failed:', error.message);
+    return res.status(201).json({
+      payment: { id: payment.id, status: 'succeeded', transactionReference: payment.provider_transaction_id },
+      meetingStatus: 'failed',
+      meetingError: 'Payment was recorded, but meeting setup or notification delivery failed. Check Meeting checks before retrying.',
+      delivery: [],
+    });
+  }
 });
 
 adminRouter.get('/meeting-checks', requireAdmin, requirePermission('live_classes', 'view'), async (req, res, next) => {
@@ -610,7 +709,7 @@ adminRouter.post('/live-classes/:id/create-meeting', requireAdmin, requirePermis
   const sessionId = z.string().uuid().safeParse(req.params.id);
   if (!sessionId.success) return validationError(res, sessionId.error);
   try {
-    const result = await ensureSessionMeeting(sessionId.data);
+    const result = await ensureSessionMeeting(sessionId.data, { allowBeforeStart: true, testModeOnly: true });
     const details = { status: result.status, missingKeys: result.missingKeys ?? [] };
     await writeAudit(req, { event: 'class_meeting_created', module: 'live_classes', targetId: sessionId.data, details });
     if (result.status === 'not_found') return res.status(404).json({ error: result.error });
@@ -620,7 +719,7 @@ adminRouter.post('/live-classes/:id/create-meeting', requireAdmin, requirePermis
     if (['unavailable', 'busy', 'creating'].includes(result.status)) {
       return res.status(409).json({ error: result.error, status: result.status });
     }
-    if (result.status === 'failed') {
+    if (['failed', 'unknown'].includes(result.status)) {
       return res.status(502).json({ error: result.error, status: result.status });
     }
     return res.json({
@@ -635,7 +734,11 @@ adminRouter.post('/live-classes/:id/send-join-details', requireAdmin, requirePer
   const sessionId = z.string().uuid().safeParse(req.params.id);
   if (!sessionId.success) return validationError(res, sessionId.error);
   try {
-    const result = await sendSessionJoinDetails(sessionId.data);
+    const result = await sendSessionJoinDetails(sessionId.data, {
+      allowBeforeStart: true,
+      testModeOnly: true,
+      directMeetingLinkForStudent: true,
+    });
     const details = {
       status: result.status,
       delivery: result.delivery?.map((item) => ({
@@ -1212,13 +1315,16 @@ async function moduleRows(module) {
          ORDER BY a.created_at DESC LIMIT 200`,
       )).rows;
     case 'integrations':
-      return [
-        { id: 'database', title: 'PostgreSQL', status: process.env.DATABASE_URL ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'PostgreSQL', credentialsPresent: Boolean(process.env.DATABASE_URL) } },
-        { id: 'payments', title: 'Razorpay test mode', status: isRazorpayTestConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Razorpay', testMode: isRazorpayTestConfigured(), capabilities: 'Full test-mode refunds only; live keys and production requests are disabled.' } },
-        { id: 'zoom', title: 'Zoom test meetings', status: isZoomTestConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Zoom', testMode: isZoomTestConfigured(), capabilities: 'Meeting creation requires explicit test mode and development environment.' } },
-        { id: 'email', title: 'Nodemailer SMTP', status: process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'Nodemailer', credentialsPresent: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD), capabilities: 'Password reset email is implemented; bulk notifications are not.' } },
-        { id: 'whatsapp', title: 'Twilio WhatsApp sandbox', status: isTwilioSandboxConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Twilio sandbox', testMode: isTwilioSandboxConfigured(), capabilities: 'Sandbox messages are restricted to configured allowlisted test recipients.' } },
-      ];
+      {
+        const meetingProvider = meetingProviderConfigurationStatus({ testModeOnly: true });
+        return [
+          { id: 'database', title: 'PostgreSQL', status: process.env.DATABASE_URL ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'PostgreSQL', credentialsPresent: Boolean(process.env.DATABASE_URL) } },
+          { id: 'payments', title: 'Razorpay test mode', status: isRazorpayTestConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Razorpay', testMode: isRazorpayTestConfigured(), capabilities: 'Full test-mode refunds only; live keys and production requests are disabled.' } },
+          { id: 'meeting_provider', title: meetingProvider.title, status: meetingProvider.configured ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: meetingProvider.id, testMode: true, missingKeys: meetingProvider.missingKeys, capabilities: meetingProvider.id === 'jitsi' ? 'Generates unique room links on public meet.jit.si; anyone with the link may join.' : 'Creates meeting links through the selected provider in development/test mode.' } },
+          { id: 'email', title: 'Nodemailer SMTP', status: process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'Nodemailer', credentialsPresent: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD), capabilities: 'Password reset email is implemented; bulk notifications are not.' } },
+          { id: 'whatsapp', title: 'Twilio WhatsApp sandbox', status: isTwilioSandboxConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Twilio sandbox', testMode: isTwilioSandboxConfigured(), capabilities: 'Sandbox messages are restricted to configured allowlisted test recipients.' } },
+        ];
+      }
     case 'configuration':
     case 'maintenance':
       return (await pool.query(
@@ -1327,6 +1433,9 @@ adminRouter.patch('/modules/:module/:id', requireAdmin, async (req, res, next) =
     } else if (module === 'bookings') {
       if (input.data.status && !['pending', 'approved', 'rejected', 'paid', 'completed', 'cancelled'].includes(input.data.status)) {
         return res.status(400).json({ error: 'Select a valid booking status.' });
+      }
+      if (input.data.status === 'paid') {
+        return res.status(409).json({ error: 'Use the bank-transfer confirmation action to record an offline payment.' });
       }
       result = await pool.query('UPDATE bookings SET status = COALESCE($2, status) WHERE id = $1 RETURNING id', [req.params.id, input.data.status ?? null]);
     } else if (module === 'live_classes') {

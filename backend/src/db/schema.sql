@@ -150,16 +150,23 @@ CREATE TABLE IF NOT EXISTS payments (
   student_id UUID REFERENCES users(id),
   provider TEXT NOT NULL DEFAULT 'razorpay',
   provider_transaction_id TEXT,
+  recorded_by UUID REFERENCES users(id),
   amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'succeeded', 'failed', 'refunded')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS recorded_by UUID REFERENCES users(id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS payments_bank_transfer_reference_idx
+  ON payments(provider_transaction_id)
+  WHERE provider = 'bank_transfer' AND provider_transaction_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS class_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id),
-  meeting_provider TEXT NOT NULL DEFAULT 'zoom',
+  meeting_provider TEXT NOT NULL DEFAULT 'google_meet',
   meeting_url TEXT,
   meeting_creation_status TEXT NOT NULL DEFAULT 'not_created'
     CHECK (meeting_creation_status IN ('not_created', 'creating', 'created', 'failed', 'unknown')),
@@ -170,6 +177,8 @@ CREATE TABLE IF NOT EXISTS class_sessions (
   recording_consent BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE class_sessions ALTER COLUMN meeting_provider SET DEFAULT 'google_meet';
 
 ALTER TABLE class_sessions
   ADD COLUMN IF NOT EXISTS meeting_creation_status TEXT NOT NULL DEFAULT 'not_created'
