@@ -5,12 +5,14 @@ import { useAuth } from '../context/AuthContext'
 import { startRazorpayCheckout } from '../lib/razorpay'
 import { playUiSound } from '../lib/sound'
 import StatusBadge from '../components/StatusBadge'
+import JoinClassDialog from '../components/JoinClassDialog'
 
 export default function Dashboard() {
   const { user } = useAuth()
   const [bookings, setBookings] = useState(null)
   const [sessions, setSessions] = useState(null)
   const [payingId, setPayingId] = useState(null)
+  const [joining, setJoining] = useState(null)
   const [error, setError] = useState('')
 
   const load = () => {
@@ -110,10 +112,15 @@ export default function Dashboard() {
                         {payingId === b.id ? 'Opening checkout…' : 'Pay now'}
                       </button>
                     )}
-                    {session?.meeting_url && (
-                      <a className="btn small ghost" href={session.meeting_url} target="_blank" rel="noreferrer" style={{ marginLeft: 8 }}>
-                        Join on Zoom
-                      </a>
+                    {session?.session_id && (session.meeting_url || b.status === 'paid') && (
+                      <button
+                        className="btn small ghost"
+                        type="button"
+                        onClick={() => setJoining(session)}
+                        style={{ marginLeft: 8 }}
+                      >
+                        Join class
+                      </button>
                     )}
                   </div>
                 </div>
@@ -122,6 +129,7 @@ export default function Dashboard() {
           })
         )}
       </div>
+      {joining && <JoinClassDialog session={joining} onClose={() => setJoining(null)} />}
     </div>
   )
 }

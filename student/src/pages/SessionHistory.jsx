@@ -43,7 +43,7 @@ export default function SessionHistory() {
   return (
     <div>
       <h1>Session history</h1>
-      <p className="page-sub">Attendance, duration and Zoom links for every class. Recordings appear only when consent was given.</p>
+      <p className="page-sub">Attendance, duration and meeting links for every class. Recordings appear only when consent was given.</p>
 
       {err && <div className="alert error">{err}</div>}
 

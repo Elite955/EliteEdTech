@@ -14,6 +14,7 @@ const MyBookings = lazy(() => import('./pages/MyBookings'))
 const PaymentHistory = lazy(() => import('./pages/PaymentHistory'))
 const SessionHistory = lazy(() => import('./pages/SessionHistory'))
 const Feedback = lazy(() => import('./pages/Feedback'))
+const WhiteboardOnlyPage = lazy(() => import('./pages/WhiteboardOnlyPage'))
 
 export default function App() {
   return (
@@ -21,6 +22,14 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route
+          path="/classroom/whiteboard/:sessionId"
+          element={
+            <ProtectedRoute>
+              <WhiteboardOnlyPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           element={
             <ProtectedRoute>

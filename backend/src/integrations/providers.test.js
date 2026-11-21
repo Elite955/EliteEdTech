@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFullRefund, getRefundStatus, isRazorpayTestConfigured } from './razorpay.js';
 import { getWhatsAppMessageStatus, isTwilioSandboxConfigured, sendWhatsAppTestMessage } from './twilio.js';
-import { createTestZoomMeeting, isZoomTestConfigured } from './zoom.js';
+import { createTestGoogleMeetSpace, isGoogleMeetTestConfigured } from './googleMeet.js';
 
 const razorpayEnv = {
   NODE_ENV: 'development',
@@ -20,12 +20,12 @@ const twilioEnv = {
   TWILIO_TEST_RECIPIENTS: '+15551234567',
 };
 
-const zoomEnv = {
+const googleMeetEnv = {
   NODE_ENV: 'development',
-  ZOOM_TEST_MODE: 'true',
-  ZOOM_CLIENT_ID: 'test-client',
-  ZOOM_CLIENT_SECRET: 'test-secret',
-  ZOOM_ACCOUNT_ID: 'test-account',
+  GOOGLE_MEET_TEST_MODE: 'true',
+  GOOGLE_MEET_CLIENT_ID: 'test-client',
+  GOOGLE_MEET_CLIENT_SECRET: 'test-secret',
+  GOOGLE_MEET_REFRESH_TOKEN: 'test-refresh-token',
 };
 
 test('Razorpay refunds require development test credentials and use paise', async () => {
@@ -108,43 +108,60 @@ test('Twilio sends only to configured sandbox recipients', async () => {
   assert.equal(messageStatus.status, 'delivered');
 });
 
-test('Zoom meetings require explicit development test mode and use the test account', async () => {
+test('Google Meet creation requires development test mode and OAuth credentials', async () => {
   let fetchCount = 0;
-  assert.equal(isZoomTestConfigured({ ...zoomEnv, NODE_ENV: 'production' }), false);
+  assert.equal(isGoogleMeetTestConfigured({ ...googleMeetEnv, NODE_ENV: 'production' }), false);
   await assert.rejects(
-    createTestZoomMeeting({
-      topic: 'Test',
-      startTime: '2027-01-01T10:00:00.000Z',
-      durationMinutes: 30,
-      env: { ...zoomEnv, NODE_ENV: 'production' },
+    createTestGoogleMeetSpace({
+      env: { ...googleMeetEnv, NODE_ENV: 'production' },
+      fetchImpl: async () => { fetchCount += 1; },
+    }),
+    /disabled/,
+  );
+  await assert.rejects(
+    createTestGoogleMeetSpace({
+      env: { ...googleMeetEnv, GOOGLE_MEET_REFRESH_TOKEN: '' },
       fetchImpl: async () => { fetchCount += 1; },
     }),
     /disabled/,
   );
   assert.equal(fetchCount, 0);
+});
 
+test('Google Meet refreshes OAuth credentials and creates a space', async () => {
   const requests = [];
-  const result = await createTestZoomMeeting({
-    topic: 'Test class',
-    startTime: '2027-01-01T10:00:00.000Z',
-    durationMinutes: 30,
-    env: zoomEnv,
+  const result = await createTestGoogleMeetSpace({
+    env: googleMeetEnv,
     fetchImpl: async (url, options) => {
       requests.push({ url, options });
       return requests.length === 1
-        ? { ok: true, status: 200, json: async () => ({ access_token: 'test-token' }) }
-        : { ok: true, status: 201, json: async () => ({ id: 123, join_url: 'https://us02web.zoom.us/j/123' }) };
+        ? { ok: true, status: 200, json: async () => ({ access_token: 'test-access-token' }) }
+        : { ok: true, status: 200, json: async () => ({ name: 'spaces/test-space', meetingUri: 'https://meet.google.com/abc-defg-hij' }) };
     },
   });
-  assert.equal(result.id, '123');
-  assert.equal(result.joinUrl, 'https://us02web.zoom.us/j/123');
-  assert.equal(requests.length, 2);
-  assert.deepEqual(JSON.parse(requests[1].options.body), {
-    topic: 'Test class',
-    type: 2,
-    start_time: '2027-01-01T10:00:00.000Z',
-    duration: 30,
-    timezone: 'UTC',
-    settings: { waiting_room: true, join_before_host: false },
-  });
+
+  assert.equal(result.id, 'spaces/test-space');
+  assert.equal(result.joinUrl, 'https://meet.google.com/abc-defg-hij');
+  assert.equal(requests[0].url, 'https://oauth2.googleapis.com/token');
+  assert.equal(new URLSearchParams(requests[0].options.body).get('grant_type'), 'refresh_token');
+  assert.equal(new URLSearchParams(requests[0].options.body).get('refresh_token'), 'test-refresh-token');
+  assert.equal(requests[1].url, 'https://meet.googleapis.com/v2/spaces');
+  assert.equal(requests[1].options.headers.authorization, 'Bearer test-access-token');
+  assert.deepEqual(JSON.parse(requests[1].options.body), {});
+});
+
+test('Google Meet rejects a non-Meet URL as an uncertain creation result', async () => {
+  let requestCount = 0;
+  await assert.rejects(
+    createTestGoogleMeetSpace({
+      env: googleMeetEnv,
+      fetchImpl: async () => {
+        requestCount += 1;
+        return requestCount === 1
+          ? { ok: true, status: 200, json: async () => ({ access_token: 'test-access-token' }) }
+          : { ok: true, status: 200, json: async () => ({ meetingUri: 'https://attacker.example/join' }) };
+      },
+    }),
+    (error) => error.outcomeUncertain === true && /unexpected link/.test(error.message),
+  );
 });

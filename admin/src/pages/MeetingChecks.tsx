@@ -46,7 +46,11 @@ type UnlinkedBooking = {
 
 type MeetingChecksData = {
   generatedAt: string
-  configuration: { zoom: ConfigurationFlag; email: ConfigurationFlag; whatsapp: ConfigurationFlag }
+  configuration: {
+    meetingProvider: ConfigurationFlag & { id: string; title: string }
+    email: ConfigurationFlag
+    whatsapp: ConfigurationFlag
+  }
   sessions: MeetingSession[]
   unlinkedPaidBookings: UnlinkedBooking[]
 }
@@ -167,7 +171,7 @@ export function MeetingChecks() {
     try {
       if (action === 'create-meeting') {
         await api(`/admin/live-classes/${sessionId}/create-meeting`, { method: 'POST' })
-        setNotice('The Zoom meeting link is ready.')
+        setNotice('The meeting link is ready.')
         celebrate('Meeting link ready')
       } else {
         const result = await api<{ delivery?: DeliveryItem[] }>(`/admin/live-classes/${sessionId}/send-join-details`, { method: 'POST' })
@@ -190,6 +194,7 @@ export function MeetingChecks() {
       const details = requestError instanceof ApiError ? requestError.data as { missingKeys?: string[]; configuration?: MeetingChecksData['configuration'] } | null : null
       const missing = details?.missingKeys ?? []
       setError(`${getErrorMessage(requestError)}${missing.length ? ` Missing: ${missing.join(', ')}.` : ''}`)
+      if (action === 'send-join-details') await load(false)
     } finally {
       setBusy('')
     }
@@ -209,7 +214,7 @@ export function MeetingChecks() {
 
   const missingConfiguration = data
     ? [
-      !data.configuration.zoom.configured ? 'Zoom' : null,
+      !data.configuration.meetingProvider.configured ? data.configuration.meetingProvider.title : null,
       !data.configuration.email.configured ? 'email' : null,
       !data.configuration.whatsapp.configured ? 'WhatsApp' : null,
     ].filter(Boolean)
@@ -222,7 +227,7 @@ export function MeetingChecks() {
         <div>
           <p className="eyebrow">LIVE CLASSES</p>
           <h2>Meeting checks</h2>
-          <p>Confirm every paid one-to-one has a Zoom link, then send the details to the student and teacher.</p>
+          <p>Confirm every paid one-to-one has a meeting link, then send the details to the student and teacher.</p>
         </div>
         <div className="intro-actions">
           <button className="secondary-button" onClick={() => void load(false)} disabled={loading || refreshing}>
@@ -235,17 +240,19 @@ export function MeetingChecks() {
       {notice && <div role="status" className="alert alert-success">{notice}</div>}
       {missingConfiguration.length > 0 && (
         <div className="alert alert-info">
-          Setup still needs {missingConfiguration.join(', ')}. Links and messages stay disabled until those keys are added to the backend environment.
+          Setup still needs {missingConfiguration.join(', ')}. The selected meeting provider is required to create new links; email and WhatsApp setup is required to send messages. Existing meeting links can still be sent.
         </div>
       )}
 
       {data && (
         <div className="meeting-config-grid">
           <ConfigurationCard
-            title="Zoom"
+            title={data.configuration.meetingProvider.title}
             icon={<Video size={17} />}
-            state={data.configuration.zoom}
-            description="Creates the one-to-one meeting link for each scheduled class."
+            state={data.configuration.meetingProvider}
+            description={data.configuration.meetingProvider.id === 'jitsi'
+              ? 'Generates a unique room on public Jitsi. Anyone with the link may join; the teacher should open it first and may need to authenticate.'
+              : 'Creates the one-to-one meeting link for each scheduled class.'}
           />
           <ConfigurationCard
             title="Email"

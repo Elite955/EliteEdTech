@@ -1,5 +1,5 @@
 import { pool } from '../db/pool.js';
-import { createMeetingDetailed, zoomConfigurationStatus } from '../zoom/zoom.js';
+import { createSelectedMeeting, meetingProviderConfigurationStatus } from './provider.js';
 import { notificationConfiguration, sendBookingDetails } from '../notifications/notifier.js';
 
 const IST_ZONE = 'Asia/Kolkata';
@@ -51,7 +51,7 @@ export function meetingContext(row) {
   };
 }
 
-export async function ensureSessionMeeting(sessionId) {
+export async function ensureSessionMeeting(sessionId, { allowBeforeStart = false, testModeOnly = false } = {}) {
   const row = await loadSession(sessionId);
   if (!row) return { status: 'not_found', error: 'Class session not found.', session: null };
   if (row.meeting_url) return { status: 'existing', session: row };
@@ -61,7 +61,7 @@ export async function ensureSessionMeeting(sessionId) {
   if (['cancelled', 'rejected'].includes(row.booking_status)) {
     return { status: 'unavailable', error: 'This booking is not active.', session: row };
   }
-  if (Date.now() < new Date(row.starts_at).getTime()) {
+  if (!allowBeforeStart && Date.now() < new Date(row.starts_at).getTime()) {
     const seconds = Math.max(1, Math.ceil((new Date(row.starts_at).getTime() - Date.now()) / 1000));
     return {
       status: 'unavailable',
@@ -69,16 +69,24 @@ export async function ensureSessionMeeting(sessionId) {
       session: row,
     };
   }
+  if (row.meeting_creation_status === 'unknown') {
+    return {
+      status: 'unknown',
+      error: 'The meeting provider may have created a meeting, but did not confirm the response. Reconcile it with the provider before retrying.',
+      session: row,
+    };
+  }
   if (row.meeting_creation_status === 'creating') {
     return { status: 'creating', error: 'A meeting link is already being created.', session: row };
   }
 
-  const zoom = zoomConfigurationStatus();
-  if (!zoom.configured) {
+  const useTestConfiguration = testModeOnly || process.env.NODE_ENV !== 'production';
+  const providerConfiguration = meetingProviderConfigurationStatus({ testModeOnly: useTestConfiguration });
+  if (!providerConfiguration.configured) {
     return {
       status: 'not_configured',
-      error: 'Zoom is not configured.',
-      missingKeys: zoom.missingKeys,
+      error: `${providerConfiguration.title} is not configured.`,
+      missingKeys: providerConfiguration.missingKeys,
       session: row,
     };
   }
@@ -99,11 +107,28 @@ export async function ensureSessionMeeting(sessionId) {
     };
   }
 
-  const result = await createMeetingDetailed({
-    topic: `EDTECH session: ${row.student_name} with ${row.teacher_name}`,
-    startsAt: row.starts_at,
-    durationMinutes: durationMinutes(row),
-  });
+  let result;
+  try {
+    const meeting = await createSelectedMeeting({ testModeOnly: useTestConfiguration });
+    result = {
+      ok: true,
+      status: 'created',
+      provider: meeting.provider,
+      joinUrl: meeting.joinUrl,
+      meetingId: meeting.id,
+    };
+  } catch (error) {
+    const status = error.outcomeUncertain ? 'unknown' : 'failed';
+    await pool.query(
+      `UPDATE class_sessions SET meeting_creation_status = $2 WHERE id = $1 AND meeting_url IS NULL`,
+      [sessionId, status],
+    );
+    return {
+      status,
+      error: error.message,
+      session: await loadSession(sessionId),
+    };
+  }
 
   if (!result.ok) {
     await pool.query(
@@ -119,8 +144,10 @@ export async function ensureSessionMeeting(sessionId) {
   }
 
   await pool.query(
-    `UPDATE class_sessions SET meeting_url = $2, meeting_creation_status = 'created' WHERE id = $1`,
-    [sessionId, result.joinUrl],
+    `UPDATE class_sessions
+     SET meeting_provider = $2, meeting_url = $3, meeting_creation_status = 'created'
+     WHERE id = $1`,
+    [sessionId, result.provider, result.joinUrl],
   );
   return {
     status: 'created',
@@ -130,23 +157,19 @@ export async function ensureSessionMeeting(sessionId) {
   };
 }
 
-export async function sendSessionJoinDetails(sessionId) {
+export async function sendSessionJoinDetails(sessionId, {
+  allowBeforeStart = false,
+  testModeOnly = false,
+  directMeetingLinkForStudent = false,
+  studentOnly = false,
+} = {}) {
   const configuration = notificationConfiguration();
-  if (!configuration.email.configured && !configuration.whatsapp.configured) {
-    return {
-      status: 'not_configured',
-      error: 'Email and WhatsApp are not configured.',
-      configuration,
-      session: await loadSession(sessionId),
-    };
-  }
-
   let row = await loadSession(sessionId);
   if (!row) return { status: 'not_found', error: 'Class session not found.', session: null };
 
   let meeting = null;
   if (!row.meeting_url) {
-    meeting = await ensureSessionMeeting(sessionId);
+    meeting = await ensureSessionMeeting(sessionId, { allowBeforeStart, testModeOnly });
     row = meeting.session ?? await loadSession(sessionId);
     if (!row?.meeting_url) {
       return {
@@ -169,9 +192,27 @@ export async function sendSessionJoinDetails(sessionId) {
       id: row.teacher_id, name: row.teacher_name, email: row.teacher_email,
       phone: row.teacher_phone, role: 'teacher',
     },
-  ];
-  const delivery = await sendBookingDetails(pool, recipients, meetingContext(row));
-  return { status: 'sent', configuration, session: row, delivery };
+  ].filter((recipient) => !studentOnly || recipient.role === 'student');
+
+  if (!configuration.email.configured && !configuration.whatsapp.configured) {
+    return {
+      status: 'not_configured',
+      error: 'Email and WhatsApp are not configured.',
+      configuration,
+      missingKeys: [
+        ...configuration.email.missingKeys,
+        ...configuration.whatsapp.missingKeys,
+      ],
+      meetingStatus: meeting?.status ?? 'existing',
+      session: row,
+    };
+  }
+
+  const delivery = await sendBookingDetails(pool, recipients, {
+    ...meetingContext(row),
+    directMeetingLinkForStudent,
+  });
+  return { status: 'sent', configuration, meetingStatus: meeting?.status ?? 'existing', session: row, delivery };
 }
 
 function summarizeNotifications(rows) {
@@ -230,13 +271,13 @@ export async function loadMeetingChecks() {
     byBooking.set(notification.booking_id, list);
   }
 
-  const zoom = zoomConfigurationStatus();
+  const meetingProvider = meetingProviderConfigurationStatus({ testModeOnly: true });
   const messaging = notificationConfiguration();
 
   return {
     generatedAt: new Date().toISOString(),
     configuration: {
-      zoom,
+      meetingProvider,
       email: messaging.email,
       whatsapp: messaging.whatsapp,
     },

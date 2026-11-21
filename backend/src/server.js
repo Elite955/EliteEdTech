@@ -13,6 +13,7 @@ import { studentRouter } from './routes/student.js';
 import { teacherRouter } from './routes/teacher.js';
 import { censorContent } from './security/profanity.js';
 import { PORTAL_COOKIES, normalizePortal, portalFromOrigin } from './security/portals.js';
+import { registerWhiteboardHandlers } from './realtime/whiteboard.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must be set to a random value of at least 32 characters.');
@@ -114,7 +115,23 @@ io.use(async (socket, next) => {
       if (portal === 'admin') return next(new Error('Chat access is not authorized.'));
     }
 
-    if (portal === 'teacher') return next(new Error('Chat access is not authorized.'));
+    if (portal === 'teacher') {
+      const teacherResult = await pool.query(
+        `SELECT u.id, u.name
+         FROM user_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL AND s.expires_at > now()
+           AND u.status = 'active' AND u.role = 'teacher'`,
+        [claims.sid, claims.sub],
+      );
+      if (!teacherResult.rowCount) return next(new Error('Teacher access is not authorized.'));
+      const teacher = teacherResult.rows[0];
+      socket.data.kind = 'teacher';
+      socket.data.userId = teacher.id;
+      socket.data.userName = teacher.name;
+      socket.data.sessionId = claims.sid;
+      return next();
+    }
 
     const studentResult = await pool.query(
       `SELECT u.id, u.name, u.status, u.role, sp.age
@@ -131,6 +148,7 @@ io.use(async (socket, next) => {
     socket.data.userId = student.id;
     socket.data.userName = student.name;
     socket.data.age = student.age ?? null;
+    socket.data.sessionId = claims.sid;
     return next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
@@ -146,8 +164,14 @@ io.on('connection', (socket) => {
     socket.join('admin-chat-moderation');
     return;
   }
-  socket.join('global');
-  socket.emit('chat:ready', { room: 'global' });
+  if (socket.data.kind === 'student') {
+    socket.join('global');
+    socket.emit('chat:ready', { room: 'global' });
+  }
+  if (socket.data.kind === 'student' || socket.data.kind === 'teacher') {
+    registerWhiteboardHandlers(socket, pool);
+  }
+  if (socket.data.kind !== 'student') return;
 
   socket.on('chat:message', async (payload, callback) => {
     try {

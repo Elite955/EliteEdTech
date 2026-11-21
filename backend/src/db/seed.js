@@ -12,15 +12,23 @@ const actions = ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'expor
 const roleDefinitions = [
   { code: 'super_admin', name: 'Super Admin', description: 'Full platform administration.', system: true, grants: '*' },
   { code: 'operations_admin', name: 'Operations Admin', description: 'User, booking, class, and attendance operations.', system: true, grants: ['dashboard', 'students', 'teachers', 'bookings', 'live_classes', 'attendance', 'support'] },
-  { code: 'finance_admin', name: 'Finance Admin', description: 'Payment, refund, payout, and revenue operations.', system: true, grants: ['dashboard', 'transactions', 'refunds', 'payouts', 'revenue_analytics', 'reports'] },
+  { code: 'finance_admin', name: 'Finance Admin', description: 'Payment, refund, payout, and revenue operations.', system: true, grants: ['dashboard', 'bookings', 'transactions', 'refunds', 'payouts', 'revenue_analytics', 'reports'] },
   { code: 'support_admin', name: 'Support Admin', description: 'User assistance and support ticket operations.', system: true, grants: ['dashboard', 'students', 'teachers', 'bookings', 'support'] },
   { code: 'moderator', name: 'Moderator', description: 'Global chat moderation.', system: true, grants: ['dashboard', 'chat_moderation'] },
 ];
 
 function actionsFor(role, module) {
-  if (role.grants === '*') return actions;
+  if (role.grants === '*') return module === 'transactions' ? [...actions, 'record_payment'] : actions;
   if (!role.grants.includes(module)) return [];
-  if (role.code === 'finance_admin') return ['view', 'export', ...(module === 'refunds' || module === 'payouts' ? ['manage'] : [])];
+  if (role.code === 'finance_admin') {
+    if (module === 'bookings') return ['view'];
+    return [
+      'view',
+      'export',
+      ...(module === 'transactions' ? ['record_payment'] : []),
+      ...(module === 'refunds' || module === 'payouts' ? ['manage'] : []),
+    ];
+  }
   if (role.code === 'moderator') return ['view', 'edit', 'manage'];
   if (role.code === 'support_admin') return module === 'support' ? ['view', 'create', 'edit', 'manage'] : ['view'];
   if (module === 'live_classes') return ['view', 'create', 'edit', 'approve', 'reject', 'export', 'manage'];
@@ -58,6 +66,10 @@ async function seed() {
         );
       }
     }
+    await client.query(
+      `INSERT INTO permissions (module, action) VALUES ('transactions', 'record_payment')
+       ON CONFLICT (module, action) DO NOTHING`,
+    );
 
     for (const role of roleDefinitions) {
       const { rows: roleRows } = await client.query('SELECT id FROM admin_roles WHERE code = $1', [role.code]);

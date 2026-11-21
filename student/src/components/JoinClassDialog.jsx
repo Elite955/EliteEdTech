@@ -1,8 +1,97 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+import SharedWhiteboard from './SharedWhiteboard'
+
+const JITSI_DOMAIN = 'meet.jit.si'
+let jitsiApiPromise
+
+function loadJitsiApi() {
+  if (typeof window.JitsiMeetExternalAPI === 'function') return Promise.resolve()
+  if (!jitsiApiPromise) {
+    jitsiApiPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = `https://${JITSI_DOMAIN}/external_api.js`
+      script.async = true
+      script.onload = resolve
+      script.onerror = () => {
+        script.remove()
+        reject(new Error('Jitsi could not be loaded. Check your connection and try again.'))
+      }
+      document.head.appendChild(script)
+    }).catch((error) => {
+      jitsiApiPromise = null
+      throw error
+    })
+  }
+  return jitsiApiPromise
+}
+
+function getJitsiRoomName(joinUrl) {
+  try {
+    const url = new URL(joinUrl)
+    const path = url.pathname.split('/').filter(Boolean)
+    if (url.protocol !== 'https:' || url.hostname !== JITSI_DOMAIN || path.length !== 1) return ''
+    return path[0]
+  } catch (error) {
+    if (error instanceof TypeError) return ''
+    throw error
+  }
+}
+
+function JitsiMeeting({ roomName, displayName, onError }) {
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    let active = true
+    let meetingApi = null
+    loadJitsiApi()
+      .then(() => {
+        if (!active || !containerRef.current) return
+        if (typeof window.JitsiMeetExternalAPI !== 'function') {
+          throw new Error('Jitsi could not be initialized.')
+        }
+        meetingApi = new window.JitsiMeetExternalAPI(JITSI_DOMAIN, {
+          roomName,
+          width: '100%',
+          height: '100%',
+          parentNode: containerRef.current,
+          userInfo: displayName ? { displayName } : undefined,
+          lang: 'en',
+          configOverwrite: {
+            prejoinPageEnabled: false,
+            disableDeepLinking: true,
+          },
+          interfaceConfigOverwrite: {
+            TILE_VIEW_MAX_COLUMNS: 2,
+            TOOLBAR_BUTTONS: [
+              'microphone',
+              'camera',
+              'desktop',
+              'tileview',
+              'fullscreen',
+              'hangup',
+            ],
+          },
+        })
+      })
+      .catch(() => {
+        if (active) onError('Jitsi could not open inside the portal. You can open the meeting in a new tab instead.')
+      })
+
+    return () => {
+      active = false
+      meetingApi?.dispose()
+    }
+  }, [displayName, onError, roomName])
+
+  return <div ref={containerRef} className="jitsi-meeting-embed" aria-label="Jitsi class meeting" />
+}
 
 export default function JoinClassDialog({ session, onClose }) {
+  const { user } = useAuth()
   const [state, setState] = useState({ loading: true, error: '', joinUrl: '', status: '' })
+  const [jitsiError, setJitsiError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -27,9 +116,19 @@ export default function JoinClassDialog({ session, onClose }) {
     return () => { active = false }
   }, [session.session_id])
 
+  const jitsiRoomName = state.joinUrl ? getJitsiRoomName(state.joinUrl) : ''
+  const isJitsi = Boolean(jitsiRoomName)
+  const providerName = isJitsi
+    ? 'Jitsi Meet'
+    : session.meeting_provider === 'zoom'
+      ? 'Zoom'
+      : session.meeting_provider === 'google_meet'
+        ? 'Google Meet'
+        : 'video meeting'
+
   return (
     <div className="join-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="join-dialog" role="dialog" aria-modal="true" aria-labelledby="join-dialog-title">
+      <section className={`join-dialog${isJitsi ? ' join-dialog--embedded' : ''}`} role="dialog" aria-modal="true" aria-labelledby="join-dialog-title">
         <div className="join-dialog-head">
           <div>
             <p className="join-dialog-label">Live class</p>
@@ -61,18 +160,46 @@ export default function JoinClassDialog({ session, onClose }) {
         )}
 
         {!state.loading && state.joinUrl && (
-          <div className="join-dialog-state">
-            <div className="join-stage">
-              <span className="join-stage-mark" aria-hidden="true">Z</span>
-              <div>
-                <strong>Zoom meeting ready</strong>
-                <span>You are still inside the student portal.</span>
+          <div className={`join-dialog-state${isJitsi ? ' join-dialog-state--embedded' : ''}`}>
+            {isJitsi ? (
+              <div className="classroom-split">
+                <SharedWhiteboard sessionId={session.session_id} />
+                <div className="classroom-video">
+                  {jitsiError ? (
+                    <div className="alert error" role="alert">
+                      {jitsiError}{' '}
+                      <a href={state.joinUrl} target="_blank" rel="noopener noreferrer">Open Jitsi in a new tab</a>
+                    </div>
+                  ) : (
+                    <JitsiMeeting
+                      roomName={jitsiRoomName}
+                      displayName={user?.name}
+                      onError={setJitsiError}
+                    />
+                  )}
+                  {!jitsiError && (
+                    <p className="muted">
+                      If your teacher shares a board-only tab in Jitsi, you can see it in the call. The board is also
+                      available beside the video here.
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-            <a className="btn" href={state.joinUrl} target="_blank" rel="noreferrer">
-              Open Zoom meeting
-            </a>
-            <p className="muted">Zoom opens in a new tab. Keep this portal open to return to your session details.</p>
+            ) : (
+              <>
+                <div className="join-stage">
+                  <span className="join-stage-mark" aria-hidden="true">V</span>
+                  <div>
+                    <strong>{providerName} meeting ready</strong>
+                    <span>You are still inside the student portal.</span>
+                  </div>
+                </div>
+                <a className="btn" href={state.joinUrl} target="_blank" rel="noopener noreferrer">
+                  Open {providerName} meeting
+                </a>
+                <p className="muted">{providerName} opens in a new tab. Keep this portal open to return to your session details.</p>
+              </>
+            )}
           </div>
         )}
 
