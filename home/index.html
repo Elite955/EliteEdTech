@@ -18,19 +18,16 @@
     <a class="skip" href="#portals">Skip to portals</a>
 
     <header class="masthead">
-      <nav class="masthead-nav" aria-label="Page sections">
+      <nav class="masthead-nav" aria-label="Main navigation">
         <a href="#how">
           <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h11M3 12h8M3 18h11"/><path d="m18 8 2 2 3-3"/></svg>
           How it works
         </a>
-        <a href="#spaces">
-          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18v12H3z"/><path d="M8 20h8M12 16v4"/></svg>
-          The desks
-        </a>
         <a href="#portals">
           <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V4a1 1 0 0 1 1-1h10v18"/><path d="M15 21V8l5 4v9M11 12h.01"/></svg>
-          Portals
+          Choose a portal
         </a>
+        <a class="masthead-teacher-link" data-portal="teacher" href="http://localhost:5174/">Teacher portal</a>
       </nav>
     </header>
 
@@ -39,47 +36,138 @@
         <div class="hero-copy">
           <img class="hero-elite-logo" src="/elite-logo-lg.png" alt="Elite" />
           <p class="kicker">Live one-to-one tutoring</p>
-          <h1 id="hero-title">A better way to learn, together.</h1>
+          <h1 id="hero-title">Find a tutor. Choose a time. Start learning.</h1>
           <p class="lead">
-            ELITE brings students and teachers into one focused place for booking, preparation and
-            live one-to-one classes. Everything around the lesson stays simple, so the lesson itself
-            gets your full attention.
+            Find a teacher, request a time and keep bookings, payments and session history together in your student workspace.
           </p>
           <div class="hero-actions">
             <a class="btn" data-portal="student" href="http://localhost:5175/login">Enter student portal</a>
             <a class="btn ghost" href="#how">See how it works</a>
           </div>
-          <div class="hero-meta">
-            <span>Students book sessions</span>
-            <span>Teachers set availability</span>
-            <span>Each portal stays separate</span>
+          <div class="hero-workspace" role="group" aria-label="Tools in the student portal">
+            <div class="hero-workspace-heading">
+              <span>Student workspace</span>
+              <span>ELITE portal</span>
+            </div>
+            <div class="hero-workspace-tools">
+              <span>Teachers</span>
+              <span>Bookings</span>
+              <span>Sessions</span>
+              <span>Payments</span>
+            </div>
           </div>
         </div>
 
-        <div class="hero-visual" aria-label="The path to a class">
-          <div class="visual-topline">
-            <span>One lesson</span>
-            <span>Clear path</span>
+        <section
+          class="hero-visual testimonial-carousel"
+          data-testimonial-carousel
+          role="region"
+          aria-roledescription="carousel"
+          aria-label="Student video testimonials"
+        >
+          <div class="testimonial-heading">
+            <div>
+              <p class="testimonial-eyebrow">Student stories</p>
+              <h2>Real students. Real progress.</h2>
+            </div>
+            <span class="testimonial-count"><span data-story-current>01</span> <span>/ 06</span></span>
           </div>
-          <ol class="visual-steps">
-            <li><span class="step-mark">01</span><span><strong>Find your teacher</strong><small>Browse by subject and rate</small></span></li>
-            <li><span class="step-mark">02</span><span><strong>Request a time</strong><small>Choose from real availability</small></span></li>
-            <li><span class="step-mark">03</span><span><strong>Meet in class</strong><small>Join the live session</small></span></li>
-          </ol>
-          <div class="visual-foot">
-            <span class="dot dot-coral"></span>
-            <span class="dot dot-mint"></span>
-            <span class="dot dot-gold"></span>
-            <p>Built for the work before and after the call.</p>
+          <div class="testimonial-frame">
+            <div class="testimonial-placeholder" data-story-placeholder>
+              <span class="testimonial-placeholder-index" data-placeholder-index>01</span>
+              <div>
+                <p>Student testimonial</p>
+                <strong>Student story <span data-placeholder-story-number>01</span></strong>
+                <span data-placeholder-message>Video clip coming soon</span>
+              </div>
+            </div>
+            <video
+              class="testimonial-video"
+              data-story-video
+              controls
+              muted
+              playsinline
+              preload="none"
+              hidden
+            ></video>
           </div>
+          <div class="testimonial-controls">
+            <div class="testimonial-slide-controls" role="group" aria-label="Testimonial slides">
+              <button type="button" data-story-previous aria-label="Previous story">←</button>
+              <button type="button" data-story-toggle aria-pressed="false">Pause slides</button>
+              <button type="button" data-story-next aria-label="Next story">→</button>
+            </div>
+            <button type="button" data-story-sound disabled>Turn sound on</button>
+          </div>
+          <div class="testimonial-dots" role="group" aria-label="Choose a student story">
+            <button type="button" data-story-dot="0" aria-label="Show student story 1" aria-current="true"></button>
+            <button type="button" data-story-dot="1" aria-label="Show student story 2"></button>
+            <button type="button" data-story-dot="2" aria-label="Show student story 3"></button>
+            <button type="button" data-story-dot="3" aria-label="Show student story 4"></button>
+            <button type="button" data-story-dot="4" aria-label="Show student story 5"></button>
+            <button type="button" data-story-dot="5" aria-label="Show student story 6"></button>
+          </div>
+          <p class="sr-only" data-story-status aria-live="polite"></p>
+        </section>
+      </section>
+
+      <section class="how-section" id="how" aria-labelledby="how-title">
+        <div class="section-head section-head--light">
+          <div>
+            <p class="kicker">The lesson journey</p>
+            <h2 id="how-title">One smooth path to a live class.</h2>
+          </div>
+          <p>Search, reserve and join—without losing the context of the lesson.</p>
+        </div>
+        <div class="steps">
+          <article class="step-card step-card--coral">
+            <div class="step-card-top"><span class="step-index">01</span><span class="step-label">Find</span></div>
+            <div class="step-graphic teacher-browser" aria-hidden="true">
+              <div class="teacher-browser-bar"><span></span><strong>Teacher directory</strong><b>3 matches</b></div>
+              <div class="teacher-browser-body">
+                <div class="teacher-browser-search"><span>⌕</span> Mathematics</div>
+                <div class="teacher-browser-results">
+                  <i><b>AR</b><span>Math</span></i>
+                  <i class="featured"><b>RV</b><span>Physics</span></i>
+                  <i><b>KP</b><span>Science</span></i>
+                </div>
+              </div>
+            </div>
+            <h3>Find the right teacher</h3>
+            <p>Compare subject expertise, profile details and rates.</p>
+          </article>
+          <article class="step-card step-card--mint">
+            <div class="step-card-top"><span class="step-index">02</span><span class="step-label">Book</span></div>
+            <div class="step-graphic booking-calendar" aria-hidden="true">
+              <div class="booking-calendar-head"><span>MON<br><b>14</b></span><span>TUE<br><b>15</b></span><span>WED<br><b>16</b></span></div>
+              <div class="booking-calendar-grid">
+                <i><span>4:30</span></i><i class="selected"><span>4:30</span><b>Booked</b></i><i><span>4:30</span></i>
+                <i><span>6:00</span></i><i><span>6:00</span></i><i><span>6:00</span></i>
+              </div>
+            </div>
+            <h3>Choose a live slot</h3>
+            <p>Reserve a time directly from real teacher availability.</p>
+          </article>
+          <article class="step-card step-card--gold">
+            <div class="step-card-top"><span class="step-index">03</span><span class="step-label">Learn</span></div>
+            <div class="step-graphic class-preview" aria-hidden="true">
+              <div class="class-preview-video">
+                <span class="class-preview-person"></span>
+                <span class="class-preview-name">Ananya</span>
+              </div>
+              <div class="class-preview-tools"><i></i><i></i><i></i></div>
+            </div>
+            <h3>Join the live class</h3>
+            <p>Meet, collaborate and keep lesson materials together.</p>
+          </article>
         </div>
       </section>
 
       <section class="portals-section" id="portals" aria-labelledby="portals-title">
         <div class="section-head">
-          <p class="kicker">Two rooms, one platform</p>
-          <h2 id="portals-title">Pick the desk that is yours.</h2>
-          <p>Students and teachers sign in separately. Each room opens with only the tools that belong there.</p>
+          <p class="kicker">Choose your workspace</p>
+          <h2 id="portals-title">One portal for every role.</h2>
+          <p>Student and teacher accounts stay separate, with tools tailored to each side of the lesson.</p>
         </div>
 
         <div class="portals">
@@ -90,7 +178,7 @@
             </div>
             <h3>Student portal</h3>
             <p class="portal-copy">
-              Find a teacher, request a time and keep every booking, payment and session in one place.
+              Find a tutor and manage your learning from one account.
             </p>
             <ul class="portal-list">
               <li>Browse teachers by subject and rate</li>
@@ -110,7 +198,7 @@
             </div>
             <h3>Teacher portal</h3>
             <p class="portal-copy">
-              Keep your availability current, review requests and stay ready for the next live class.
+              Set availability, handle requests and manage your teaching schedule.
             </p>
             <ul class="portal-list">
               <li>Set weekly availability</li>
@@ -125,57 +213,32 @@
         </div>
       </section>
 
-      <section class="how-section" id="how" aria-labelledby="how-title">
-        <div class="section-head section-head--light">
-          <p class="kicker">How it works</p>
-          <h2 id="how-title">From request to class in three clear moves.</h2>
-          <p>No scattered messages, no guesswork about the next step. The workflow carries the details.</p>
-        </div>
-        <div class="steps">
-          <article class="step-card step-card--coral">
-            <span class="step-index">01</span>
-            <h3>Choose a teacher</h3>
-            <p>Compare subjects, rates and the times a teacher has already made available.</p>
-          </article>
-          <article class="step-card step-card--mint">
-            <span class="step-index">02</span>
-            <h3>Request a slot</h3>
-            <p>Send a request for the time that works. The teacher reviews it in their own queue.</p>
-          </article>
-          <article class="step-card step-card--gold">
-            <span class="step-index">03</span>
-            <h3>Attend the session</h3>
-            <p>Once approved and paid, the class appears with the details needed to join.</p>
-          </article>
-        </div>
-      </section>
-
       <section class="spaces-section" id="spaces" aria-labelledby="spaces-title">
         <div class="section-head">
-          <p class="kicker">Built around the lesson</p>
-          <h2 id="spaces-title">Two desks, each with a job.</h2>
-          <p>The portals share one platform but keep their work separate, from sign-in to daily tools.</p>
+          <p class="kicker">Booking to class</p>
+          <h2 id="spaces-title">What happens after you request?</h2>
+          <p>Here is the booking sequence, including when payment happens and how the class is created.</p>
         </div>
         <div class="spaces">
           <article class="space-card">
             <span class="space-mark space-mark--lilac" aria-hidden="true">01</span>
             <div>
-              <h3>The student desk</h3>
-              <p>Browse teachers, manage bookings, check payment history and leave feedback after class.</p>
+              <h3>Request an open time</h3>
+              <p>Choose an available slot from a teacher’s schedule. The request stays pending until the teacher responds.</p>
             </div>
           </article>
           <article class="space-card">
             <span class="space-mark space-mark--sky" aria-hidden="true">02</span>
             <div>
-              <h3>The teacher desk</h3>
-              <p>Publish availability, manage the booking queue, run sessions and review student feedback.</p>
+              <h3>The teacher approves or declines</h3>
+              <p>Your booking status updates when the teacher responds, so you know whether the time is confirmed.</p>
             </div>
           </article>
           <article class="space-card">
             <span class="space-mark space-mark--coral" aria-hidden="true">03</span>
             <div>
-              <h3>Clear records</h3>
-              <p>Booking status, session history and payments stay visible to the people who need them.</p>
+              <h3>Pay after approval</h3>
+              <p>Once approved, complete payment in the student portal. Confirmed payment creates the class session.</p>
             </div>
           </article>
         </div>
