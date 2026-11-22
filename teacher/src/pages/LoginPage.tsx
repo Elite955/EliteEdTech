@@ -27,7 +27,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const manualSecret = (mfa?.otpAuthUrl?.match(/secret=([^&]+)/)?.[1] ?? '')
 
-  if (user) {
+  if (user && !loading) {
     navigate('/dashboard', { replace: true })
     return null
   }
