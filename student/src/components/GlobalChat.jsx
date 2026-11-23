@@ -9,6 +9,7 @@ export default function GlobalChat({ onClose }) {
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [connected, setConnected] = useState(false)
+  const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [closing, setClosing] = useState(false)
@@ -33,20 +34,39 @@ export default function GlobalChat({ onClose }) {
 
   useEffect(() => {
     let cancelled = false
-    api
-      .get('/chat/messages?room=global')
-      .then((res) => {
+    const mergeMessages = (incoming) => {
+      setMessages((current) => {
+        const byId = new Map()
+        ;[...current, ...(incoming || [])].forEach((message) => {
+          const key = message.id ? `id:${message.id}` : `row:${message.created_at}:${message.sender_id}:${message.content}`
+          byId.set(key, message)
+        })
+        return [...byId.values()].sort((a, b) => {
+          const first = new Date(a.created_at || 0).getTime()
+          const second = new Date(b.created_at || 0).getTime()
+          return first - second
+        })
+      })
+    }
+
+    const loadHistory = () => {
+      api
+        .get('/chat/messages?room=global')
+        .then((res) => {
         if (!cancelled) {
-          setMessages(res.messages || [])
+          mergeMessages(res.messages || [])
           setLoaded(true)
         }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setErr('Could not load recent messages.')
-          setLoaded(true)
-        }
-      })
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setErr('Could not load recent messages.')
+            setLoaded(true)
+          }
+        })
+    }
+
+    loadHistory()
 
     const socket = connectSocket()
     socketRef.current = socket
@@ -54,11 +74,12 @@ export default function GlobalChat({ onClose }) {
     const join = () => {
       setConnected(true)
       setErr('')
+      loadHistory()
     }
     const leave = () => setConnected(false)
     const fail = (event) => setErr(`Chat server unreachable: ${event?.message || 'connection failed'}`)
     const chatError = (event) => setErr(event?.message || 'Chat error')
-    const receive = (message) => setMessages((prev) => [...prev, message])
+    const receive = (message) => mergeMessages([message])
 
     if (socket.connected) join()
     socket.on('connect', join)
@@ -101,9 +122,17 @@ export default function GlobalChat({ onClose }) {
   function send(event) {
     event.preventDefault()
     const content = text.trim()
-    if (!content || !socketRef.current?.connected) return
-    socketRef.current.emit('chat:message', { room: 'global', content })
-    setText('')
+    if (!content || !socketRef.current?.connected || sending) return
+    setSending(true)
+    setErr('')
+    socketRef.current.emit('chat:message', { room: 'global', content }, (ack) => {
+      setSending(false)
+      if (ack?.ok) {
+        setText('')
+      } else {
+        setErr('The message could not be sent. Please try again.')
+      }
+    })
   }
 
   return (
@@ -146,6 +175,10 @@ export default function GlobalChat({ onClose }) {
           </div>
         )}
         {err && <div className="alert error chat-note">{err}</div>}
+        <div className="chat-room-status" aria-live="polite">
+          <span className={connected ? 'status-dot connected' : 'status-dot'} />
+          {connected ? 'Live community room' : 'Reconnecting…'}
+        </div>
 
         <div className="chat-msgs" ref={boxRef} role="log" aria-live="polite">
           {!loaded && <div className="empty">Opening the room…</div>}
@@ -153,18 +186,25 @@ export default function GlobalChat({ onClose }) {
           {messages.map((message, index) => {
             const mine = String(message.sender_id) === String(user?.id)
             const roleLabel = message.sender_role_label || (message.sender_role === 'teacher' ? 'Teacher' : 'Student')
+            const senderName = message.sender_name || message.sender?.name || roleLabel
+            const initial = senderName?.charAt(0).toUpperCase() || 'S'
             return (
-              <div key={message.id ?? index} className={`msg${mine ? ' mine' : ''}`}>
-                <div className="who">
-                  {message.sender_name || message.sender?.name || roleLabel}{mine ? ' (you)' : ''}
-                  {roleLabel && <span className="chat-role">{roleLabel}</span>}
-                </div>
-                {message.content}
-                {message.created_at && (
-                  <div className="who" style={{ marginTop: 4, textAlign: mine ? 'right' : 'left' }}>
-                    {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div key={message.id ?? index} className={`chat-message-row${mine ? ' mine' : ''}`}>
+                {!mine && <div className="chat-avatar" aria-hidden="true">{initial}</div>}
+                <div className={`msg${mine ? ' mine' : ''}`}>
+                  <div className="chat-message-meta">
+                    <span className="chat-sender">
+                      {senderName}{mine ? ' (you)' : ''}
+                    </span>
+                    {roleLabel && <span className="chat-role">{roleLabel}</span>}
                   </div>
-                )}
+                  <div className="chat-message-content">{message.content}</div>
+                  {message.created_at && (
+                    <time className="chat-message-time" dateTime={message.created_at}>
+                      {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </time>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -174,12 +214,15 @@ export default function GlobalChat({ onClose }) {
           <input
             ref={inputRef}
             aria-label="Message"
-            placeholder="Type a message…"
+            placeholder={connected ? 'Message the community…' : 'Waiting for chat connection…'}
             value={text}
             onChange={(event) => setText(event.target.value)}
             maxLength={500}
+            disabled={!connected}
           />
-          <button className="btn small" disabled={!connected || !text.trim()}>Send</button>
+          <button className="btn small" disabled={!connected || !text.trim() || sending}>
+            {sending ? 'Sending…' : 'Send'}
+          </button>
         </form>
       </aside>
     </>

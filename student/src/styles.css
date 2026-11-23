@@ -1219,13 +1219,120 @@ tr:last-child td { border-bottom: none; }
   margin: 12px 14px 0;
 }
 
+.chat-room-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.chat-room-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.chat-room-status .status-dot.connected {
+  background: #047857;
+  box-shadow: 0 0 0 3px color-mix(in oklab, #047857, transparent 82%);
+}
+
 .chat-drawer .chat-msgs {
   min-height: 0;
   padding: 16px;
 }
 
-.chat-drawer .msg {
+.chat-drawer .chat-message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 88%;
+  width: fit-content;
+}
+
+.chat-drawer .chat-message-row.mine {
+  align-self: flex-end;
   max-width: 82%;
+}
+
+.chat-drawer .chat-avatar {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 2px;
+  border-radius: 50%;
+  background: var(--night);
+  color: var(--night-ink);
+  font-size: 0.76rem;
+  font-weight: 800;
+  box-shadow: 0 3px 10px color-mix(in oklab, var(--night), transparent 74%);
+}
+
+.chat-drawer .msg {
+  max-width: 100%;
+  min-width: 112px;
+  padding: 10px 12px 8px;
+  border-radius: 6px 16px 16px 16px;
+  box-shadow: 0 5px 16px color-mix(in oklab, var(--ink), transparent 92%);
+}
+
+.chat-drawer .msg.mine {
+  border-radius: 16px 6px 16px 16px;
+  background: var(--night);
+  border-color: var(--night);
+  box-shadow: 0 5px 16px color-mix(in oklab, var(--night), transparent 82%);
+}
+
+.chat-message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.chat-sender {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.71rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.chat-message-content {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.chat-message-time {
+  display: block;
+  margin-top: 5px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  line-height: 1.2;
+  opacity: 0.62;
+}
+
+.chat-drawer .chat-role {
+  flex-shrink: 0;
+  margin-left: 0;
 }
 
 .chat-drawer .chat-input {
@@ -1503,11 +1610,13 @@ select option {
     right: 14px;
     bottom: 14px;
     width: 48px;
+    min-width: 48px;
     min-height: 48px;
+    height: 48px;
     padding: 0;
     justify-content: center;
   }
-  .chat-launcher span { display: none; }
+  .chat-launcher .chat-launcher-label { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2679,6 +2788,66 @@ a.btn:hover {
   background: var(--accent) !important;
   border-color: var(--accent) !important;
   color: var(--night-ink) !important;
+}
+
+.chat-launcher {
+  gap: 10px;
+  min-width: 156px;
+  height: 48px;
+  border: 1px solid color-mix(in oklab, var(--night-ink), transparent 82%) !important;
+  border-radius: 999px !important;
+  background: var(--night) !important;
+  box-shadow:
+    0 12px 32px color-mix(in oklab, var(--night), transparent 72%),
+    0 2px 8px color-mix(in oklab, var(--ink), transparent 88%) !important;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.chat-launcher:hover {
+  transform: translateY(-2px);
+  background: color-mix(in oklab, var(--night), white 7%) !important;
+  border-color: color-mix(in oklab, var(--night-ink), transparent 72%) !important;
+  color: var(--night-ink) !important;
+  box-shadow:
+    0 16px 38px color-mix(in oklab, var(--night), transparent 68%),
+    0 3px 10px color-mix(in oklab, var(--ink), transparent 84%) !important;
+}
+
+.chat-launcher-icon {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--night-ink), transparent 88%);
+  color: var(--night-ink);
+}
+
+.chat-launcher-icon svg {
+  color: var(--night-ink);
+}
+
+.chat-launcher-live {
+  position: absolute;
+  right: -1px;
+  bottom: 1px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--night);
+  border-radius: 50%;
+  background: #78e0a3;
+  box-sizing: content-box;
+}
+
+.chat-launcher-label {
+  display: inline;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .btn.ghost,

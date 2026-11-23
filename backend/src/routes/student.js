@@ -631,7 +631,7 @@ studentRouter.get('/chat/messages', requireAuthenticatedUser, requireStudent, as
       `SELECT m.id, m.sender_id, u.name AS sender_name, u.role AS sender_role, m.content, m.created_at
        FROM chat_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.room = $1 AND m.status = 'visible'
-       ORDER BY m.created_at DESC LIMIT 50`,
+       ORDER BY m.created_at DESC LIMIT 100`,
       [room],
     );
     return res.json({ messages: rows.reverse() });
