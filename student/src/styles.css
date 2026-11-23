@@ -1,5 +1,5 @@
 /* EdTech - Student - shape: The Study
- * A clean paper desk, deep blue ink and one confident indigo signal.
+ * A clean paper desk, Deep Water ink and calm mint accents.
  * Warm neutrals, bright but quiet accents, and type set for reading at a glance.
  */
 
@@ -2700,31 +2700,32 @@ table tbody tr:hover {
 }
 
 :root {
-  --paper: #f6efe3;
-  --paper-2: #efe4d2;
-  --paper-3: #f3dcd7;
-  --surface: #fffaf2;
-  --ink: #4a3a34;
-  --ink-2: #6d554e;
-  --muted: #8b766b;
-  --line: #b6887e;
-  --line-2: #96685f;
-  --accent: #f0a6a1;
-  --accent-ink: #d9726f;
-  --accent-soft: #fbe5e2;
-  --night: #7d3535;
-  --night-ink: #fff5f0;
-  --night-soft: #ffe8e2;
-  --night-muted: #e2b0a8;
-  --coral: #e88b86;
-  --coral-soft: #fbe5e2;
-  --mint: #d8a49e;
-  --mint-soft: #f6e8e2;
-  --gold: #d9b38c;
-  --gold-soft: #f5ead9;
-  --lilac: #c9a1a8;
-  --lilac-soft: #f4e6e8;
-  --star: #d9b38c;
+  --paper: #f5faf9;
+  --paper-2: #eaf3f1;
+  --paper-3: #dcebe8;
+  --surface: #ffffff;
+  --ink: #263b38;
+  --ink-2: #4a625e;
+  --muted: #718581;
+  --line: #c0d2cf;
+  --line-2: #91aaa5;
+  --accent: #68b7ac;
+  --accent-ink: #00596f;
+  --accent-soft: #dff1ed;
+  --night: #00596f;
+  --night-ink: #f4fbf9;
+  --night-soft: #c4e6df;
+  --night-muted: #95c7be;
+  --info: #00596f;
+  --coral: #58a69a;
+  --coral-soft: #e2f2ef;
+  --mint: #8bc5ac;
+  --mint-soft: #e9f4ed;
+  --gold: #d5b36a;
+  --gold-soft: #f7f0dd;
+  --lilac: #a5b8c5;
+  --lilac-soft: #edf2f5;
+  --star: #b88d34;
   --shadow: 0 1px 2px rgba(91, 48, 48, 0.08), 0 20px 44px -28px rgba(91, 48, 48, 0.28);
 }
 
@@ -2933,12 +2934,12 @@ a.btn:hover {
   height: 3px;
   border-radius: 2px;
   overflow: hidden;
-  background: #ece6d6;
+  background: #dcebe8;
 }
 
 .elite-loader-fill {
   height: 100%;
-  background: linear-gradient(90deg, #b57800, #f8d65e, #e2a519);
+  background: linear-gradient(90deg, #00596f, #68b7ac, #a5d9cc);
   transition: width 120ms linear;
 }
 
@@ -2949,11 +2950,11 @@ a.btn:hover {
   font-size: 12px;
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: #8a806a;
+  color: #718581;
 }
 
 .elite-loader-status output {
-  color: #2a2417;
+  color: #263b38;
   font-variant-numeric: tabular-nums;
   letter-spacing: .06em;
 }
@@ -2990,6 +2991,10 @@ a.btn:hover {
   max-height: 23px;
 }
 
+.student-shell .sidebar .brand-logo-img {
+  filter: brightness(0) invert(1);
+}
+
 .sidebar-brand {
   gap: 8px;
   padding-inline: 14px;
@@ -3023,4 +3028,191 @@ a.btn:hover {
   line-height: 1.5;
   text-align: center;
   word-break: break-all;
+}
+
+/* Premium shared portal finish */
+.student-shell .content {
+  max-width: 1220px;
+  padding: clamp(30px, 4vw, 48px) clamp(20px, 4vw, 48px) 72px;
+}
+
+.topbar {
+  height: 76px;
+  padding-inline: clamp(20px, 4vw, 48px);
+  background: #ffffff;
+  border-bottom-color: color-mix(in oklab, var(--line), white 18%);
+  box-shadow: 0 10px 28px -28px color-mix(in oklab, var(--night), transparent 18%);
+}
+
+.sidebar {
+  border-right: 0;
+  box-shadow: 10px 0 36px -32px color-mix(in oklab, var(--night), black 20%);
+}
+
+.sidebar-brand {
+  height: 76px;
+  min-height: 76px;
+  padding-inline: 18px;
+}
+
+.nav-group-label {
+  padding: 10px 11px 8px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nav-link {
+  min-height: 46px;
+  border-radius: 11px;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.nav-link:hover:not(.active) {
+  background: color-mix(in oklab, var(--night-ink), transparent 91%) !important;
+}
+
+.nav-link.active {
+  background: color-mix(in oklab, var(--night), white 12%) !important;
+  box-shadow: inset 3px 0 var(--accent) !important;
+}
+
+.content h1 {
+  margin-bottom: 10px;
+  font-size: clamp(1.8rem, 1.45rem + 1.15vw, 2.35rem);
+}
+
+.content h1::after {
+  background: linear-gradient(90deg, var(--line), color-mix(in oklab, var(--accent), white 26%));
+}
+
+.page-sub {
+  margin-bottom: 30px;
+  line-height: 1.65;
+}
+
+.cards {
+  gap: 20px;
+}
+
+.card {
+  padding: 22px;
+  border-color: color-mix(in oklab, var(--line), white 14%);
+  border-radius: 18px;
+  background: #ffffff !important;
+  box-shadow: 0 12px 32px -28px color-mix(in oklab, var(--night), transparent 12%);
+}
+
+.cards .card:hover,
+.teacher-card:hover,
+.session-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--accent), var(--line) 54%);
+  box-shadow: 0 20px 38px -30px color-mix(in oklab, var(--night), transparent 8%);
+}
+
+.card.form-card {
+  padding: 32px;
+  border-radius: 22px;
+  box-shadow: 0 28px 72px -48px color-mix(in oklab, var(--night), transparent 12%);
+}
+
+.stat .num {
+  color: var(--night);
+}
+
+.btn {
+  min-height: 46px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+.btn.small {
+  min-height: 38px;
+  padding: 7px 15px;
+  font-size: 0.88rem;
+}
+
+.btn.ghost {
+  border: 1px solid var(--line-2) !important;
+  background: transparent !important;
+  color: var(--accent-ink) !important;
+  box-shadow: none;
+}
+
+.btn.ghost:hover {
+  border-color: var(--accent-ink) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent-ink) !important;
+}
+
+.field input,
+.field textarea,
+.field select,
+.teacher-search-field input {
+  border-color: var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.profile-menu {
+  border-color: color-mix(in oklab, var(--line), white 14%);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px -30px color-mix(in oklab, var(--night), transparent 8%);
+}
+
+table {
+  border-color: color-mix(in oklab, var(--line), white 14%);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px -28px color-mix(in oklab, var(--night), transparent 12%);
+}
+
+th {
+  background: var(--paper-2);
+}
+
+@media (max-width: 640px) {
+  .student-shell .content {
+    padding: 24px 16px 52px;
+  }
+
+  .topbar {
+    height: 68px;
+    padding-inline: 16px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .card.form-card {
+    padding: 26px 22px 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-link {
+    transition: none;
+  }
+}
+
+.btn:hover,
+button.btn:hover,
+a.btn:hover {
+  color: var(--ink) !important;
+}
+
+.teacher-card .teacher-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #ffffff !important;
+}
+
+.teacher-card .teacher-cta:hover {
+  color: var(--ink) !important;
 }

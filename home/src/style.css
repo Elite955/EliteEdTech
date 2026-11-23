@@ -1052,31 +1052,31 @@ h3 {
 }
 
 :root {
-  --paper: #f6efe3;
-  --paper-2: #efe4d2;
-  --paper-3: #f3dcd7;
-  --surface: #fffaf2;
-  --ink: #4a3a34;
-  --ink-2: #6d554e;
-  --muted: #8b766b;
-  --line: #b6887e;
-  --line-2: #96685f;
-  --accent: #f0a6a1;
-  --accent-ink: #d9726f;
-  --accent-soft: #fbe5e2;
-  --night: #7d3535;
-  --night-ink: #fff5f0;
-  --night-soft: #ffe8e2;
-  --night-muted: #e2b0a8;
-  --coral: #e88b86;
-  --coral-soft: #fbe5e2;
-  --mint: #d8a49e;
-  --mint-soft: #f6e8e2;
-  --gold: #d9b38c;
-  --gold-soft: #f5ead9;
-  --lilac: #c9a1a8;
-  --lilac-soft: #f4e6e8;
-  --sky: #d8a7a2;
+  --paper: #f5faf9;
+  --paper-2: #eaf3f1;
+  --paper-3: #dcebe8;
+  --surface: #ffffff;
+  --ink: #263b38;
+  --ink-2: #4a625e;
+  --muted: #718581;
+  --line: #c0d2cf;
+  --line-2: #91aaa5;
+  --accent: #68b7ac;
+  --accent-ink: #00596f;
+  --accent-soft: #dff1ed;
+  --night: #00596f;
+  --night-ink: #f4fbf9;
+  --night-soft: #c4e6df;
+  --night-muted: #95c7be;
+  --coral: #58a69a;
+  --coral-soft: #e2f2ef;
+  --mint: #8bc5ac;
+  --mint-soft: #e9f4ed;
+  --gold: #d5b36a;
+  --gold-soft: #f7f0dd;
+  --lilac: #a5b8c5;
+  --lilac-soft: #edf2f5;
+  --sky: #83bec3;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -1189,6 +1189,7 @@ body {
   max-width: 160px;
   max-height: 44px;
   vertical-align: middle;
+  filter: brightness(0) invert(1);
 }
 
 /* Homepage student-story carousel */
@@ -1865,4 +1866,246 @@ body {
   border-color: var(--night) !important;
   background: var(--night) !important;
   color: var(--night-ink) !important;
+}
+
+/* Premium finish */
+.masthead {
+  min-height: 80px;
+  border-bottom: 1px solid color-mix(in oklab, var(--night-ink), transparent 90%);
+  box-shadow: 0 10px 28px -24px color-mix(in oklab, var(--night), transparent 35%);
+}
+
+.hero {
+  gap: clamp(40px, 7vw, 96px);
+  padding-top: clamp(58px, 7vw, 92px);
+  padding-bottom: clamp(64px, 8vw, 100px);
+}
+
+.hero-elite-logo {
+  width: min(360px, 74vw);
+  max-height: 112px;
+  margin-bottom: 22px;
+}
+
+.hero .kicker,
+.testimonial-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 11ch;
+  margin-top: 15px;
+  line-height: 1.02;
+}
+
+.hero .lead {
+  max-width: 54ch;
+  line-height: 1.75;
+}
+
+.hero-actions {
+  gap: 14px;
+  margin-top: 32px;
+}
+
+.hero-workspace {
+  padding: 18px;
+  border-color: color-mix(in oklab, var(--line), white 22%);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #ffffff, var(--paper-2));
+  box-shadow: 0 12px 32px -28px color-mix(in oklab, var(--night), transparent 24%);
+}
+
+.hero-workspace-tools span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in oklab, white, var(--paper) 35%);
+  font-size: 0.78rem;
+}
+
+.hero-visual.testimonial-carousel {
+  width: 100%;
+  gap: 18px;
+  padding: clamp(16px, 2.2vw, 24px);
+  border: 1px solid color-mix(in oklab, var(--line), white 20%);
+  border-radius: 22px;
+  background: color-mix(in oklab, white, var(--paper) 24%);
+  box-shadow: 0 24px 60px -42px color-mix(in oklab, var(--night), transparent 24%);
+}
+
+.testimonial-heading h2 {
+  margin-top: 7px;
+  font-size: clamp(1.35rem, 2.1vw, 1.7rem);
+  line-height: 1.12;
+}
+
+.testimonial-frame {
+  border-radius: 15px;
+  box-shadow: 0 12px 28px -22px color-mix(in oklab, var(--night), transparent 18%);
+}
+
+.testimonial-controls button {
+  min-height: 40px;
+  border-radius: 999px;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.testimonial-dots {
+  gap: 8px;
+}
+
+.testimonial-dots button {
+  height: 3px;
+  border-radius: 999px;
+}
+
+.portal-card {
+  padding: clamp(24px, 3vw, 32px);
+  border-color: color-mix(in oklab, var(--line), white 20%);
+  border-radius: 20px;
+  box-shadow: 0 14px 36px -32px color-mix(in oklab, var(--night), transparent 20%);
+}
+
+.portal-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 44px -34px color-mix(in oklab, var(--night), transparent 12%);
+}
+
+.portal-glyph {
+  border-radius: 15px;
+}
+
+.portal-card--teacher .portal-list li::before {
+  background: var(--mint);
+}
+
+.btn {
+  min-height: 48px;
+  padding-inline: 21px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+
+.portal-actions .btn {
+  min-width: 0;
+  padding-inline: 12px;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.portal-actions .btn.ghost {
+  background: transparent !important;
+  border-color: var(--line-2) !important;
+  color: var(--accent-ink) !important;
+}
+
+.portal-actions .btn.ghost:hover {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent-ink) !important;
+  color: var(--accent-ink) !important;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -20px color-mix(in oklab, var(--night), transparent 8%);
+}
+
+.step-card {
+  padding: 20px;
+  border-radius: 17px;
+  box-shadow: 0 12px 30px -28px color-mix(in oklab, var(--night), transparent 16%);
+}
+
+.step-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--accent), var(--line) 55%);
+  box-shadow: 0 20px 36px -30px color-mix(in oklab, var(--night), transparent 10%);
+}
+
+.step-graphic {
+  border-radius: 11px;
+}
+
+.space-card {
+  padding: 22px 24px;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px -28px color-mix(in oklab, var(--night), transparent 20%);
+}
+
+.space-card:hover {
+  transform: translateY(-2px);
+  background: color-mix(in oklab, white, var(--paper) 30%);
+}
+
+.statement-section {
+  margin-top: clamp(40px, 5vw, 64px);
+  border: 1px solid color-mix(in oklab, var(--line), white 14%);
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--surface), var(--paper-2)) !important;
+}
+
+.statement-section .btn-light {
+  border-color: var(--night) !important;
+  background: var(--night) !important;
+  color: var(--night-ink) !important;
+}
+
+.statement-section .btn-light:hover {
+  border-color: color-mix(in oklab, var(--night), white 12%) !important;
+  background: color-mix(in oklab, var(--night), white 12%) !important;
+  color: var(--night-ink) !important;
+}
+
+.statement-section .btn-outline-light {
+  border-color: color-mix(in oklab, var(--night), transparent 35%) !important;
+  color: var(--night) !important;
+}
+
+.statement-section .btn-outline-light:hover {
+  border-color: var(--night) !important;
+  background: var(--night) !important;
+  color: var(--night-ink) !important;
+}
+
+.colophon {
+  border-top: 0;
+  padding-block: 30px;
+}
+
+@media (max-width: 900px) {
+  .hero-visual.testimonial-carousel {
+    max-width: 620px;
+    justify-self: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .hero {
+    padding-bottom: 52px;
+  }
+
+  .hero-visual.testimonial-carousel {
+    border-radius: 17px;
+  }
+
+  .portal-card {
+    padding: 22px;
+  }
+
+  .statement-section {
+    margin-inline: 16px;
+    border-radius: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-card:hover,
+  .step-card:hover,
+  .space-card:hover,
+  .btn:hover {
+    transform: none;
+  }
 }

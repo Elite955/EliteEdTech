@@ -1214,22 +1214,22 @@ textarea:focus-visible {
 }
 
 :root {
-  --paper: #f6efe3;
-  --paper-2: #efe4d2;
-  --paper-3: #f3dcd7;
-  --surface: #fffaf2;
-  --ink: #4a3a34;
-  --ink-2: #6d554e;
-  --muted: #8b766b;
-  --line: #b6887e;
-  --line-2: #96685f;
-  --accent: #f0a6a1;
-  --accent-ink: #d9726f;
-  --accent-soft: #fbe5e2;
-  --night: #7d3535;
-  --night-ink: #fff5f0;
-  --night-soft: #ffe8e2;
-  --night-muted: #e2b0a8;
+  --paper: #f5faf9;
+  --paper-2: #eaf3f1;
+  --paper-3: #dcebe8;
+  --surface: #ffffff;
+  --ink: #263b38;
+  --ink-2: #4a625e;
+  --muted: #718581;
+  --line: #c0d2cf;
+  --line-2: #91aaa5;
+  --accent: #68b7ac;
+  --accent-ink: #00596f;
+  --accent-soft: #dff1ed;
+  --night: #00596f;
+  --night-ink: #f4fbf9;
+  --night-soft: #c4e6df;
+  --night-muted: #95c7be;
   --bad: #c85b5b;
   --bad-soft: #fbe5e2;
   --shadow: 0 1px 2px rgba(91, 48, 48, 0.08), 0 20px 44px -28px rgba(91, 48, 48, 0.28);
@@ -1682,12 +1682,12 @@ a.bg-blue-600:hover,
   height: 3px;
   border-radius: 2px;
   overflow: hidden;
-  background: #ece6d6;
+  background: #dcebe8;
 }
 
 .elite-loader-fill {
   height: 100%;
-  background: linear-gradient(90deg, #b57800, #f8d65e, #e2a519);
+  background: linear-gradient(90deg, #00596f, #68b7ac, #a5d9cc);
   transition: width 120ms linear;
 }
 
@@ -1698,11 +1698,11 @@ a.bg-blue-600:hover,
   font-size: 12px;
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: #8a806a;
+  color: #718581;
 }
 
 .elite-loader-status output {
-  color: #2a2417;
+  color: #263b38;
   font-variant-numeric: tabular-nums;
   letter-spacing: .06em;
 }
@@ -1737,6 +1737,10 @@ a.bg-blue-600:hover,
 .teacher-shell.is-collapsed .brand-logo-img {
   max-width: 68px;
   max-height: 23px;
+}
+
+.teacher-shell .sidebar .brand-logo-img {
+  filter: brightness(0) invert(1);
 }
 
 .sidebar-brand {
