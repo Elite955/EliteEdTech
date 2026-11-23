@@ -6,6 +6,27 @@ function Test-Port([int]$port) {
   [bool](Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
 }
 
+function Ensure-Dependencies([string]$dir, [string]$label) {
+  $dirPath = Join-Path $root $dir
+  if (Test-Path -LiteralPath (Join-Path $dirPath 'node_modules')) { return }
+
+  Write-Host "${label}: installing dependencies..."
+  $lock = Join-Path $dirPath 'package-lock.json'
+  $arguments = if (Test-Path -LiteralPath $lock) {
+    @('ci', '--no-audit', '--no-fund')
+  } else {
+    @('install', '--no-audit', '--no-fund')
+  }
+
+  Push-Location $dirPath
+  try {
+    & npm.cmd @arguments
+    if ($LASTEXITCODE -ne 0) { throw "$label dependency installation failed with exit code $LASTEXITCODE" }
+  } finally {
+    Pop-Location
+  }
+}
+
 function Test-BackendCurrent {
   try {
     Invoke-WebRequest -Uri 'http://localhost:4000/api/teacher/dashboard/stats' -UseBasicParsing -TimeoutSec 3 | Out-Null
@@ -33,7 +54,16 @@ function Stop-PortProcess([int]$port) {
 }
 
 if (-not (Test-Port 5432)) {
-  & "C:\Users\ADMIN\pg16\bin\pg_ctl.exe" -D "C:\Users\ADMIN\pg16\data" -l "C:\Users\ADMIN\pg16\logfile" start
+  $defaultPgCtl = Join-Path $env:USERPROFILE 'pg16\bin\pg_ctl.exe'
+  $pgCtl = if ($env:PG_CTL) { $env:PG_CTL } elseif (Test-Path -LiteralPath $defaultPgCtl) { $defaultPgCtl } else { 'pg_ctl' }
+  $pgData = if ($env:PGDATA) { $env:PGDATA } else { Join-Path $env:USERPROFILE 'pg16\data' }
+  $pgLog = if ($env:PG_LOG_FILE) { $env:PG_LOG_FILE } else { Join-Path $root 'logs\postgres.log' }
+
+  if (-not (Get-Command $pgCtl -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath $pgCtl)) {
+    throw 'PostgreSQL is not running. Set PG_CTL and PGDATA (and optionally PG_LOG_FILE) to your local PostgreSQL installation.'
+  }
+
+  & $pgCtl -D $pgData -l $pgLog start
   Start-Sleep -Seconds 2
 }
 
@@ -43,6 +73,8 @@ if (Test-Port 4000) {
     Stop-PortProcess 4000
   }
 }
+
+Ensure-Dependencies 'backend' 'Backend'
 
 if (-not (Test-Port 4000)) {
   Start-Process -FilePath npm.cmd -ArgumentList 'run', 'dev' -WorkingDirectory "$root\backend" `
@@ -59,10 +91,7 @@ $apps = @(
 
 foreach ($app in $apps) {
   if (Test-Port $app.Port) { continue }
-  if (-not (Test-Path "$root\$($app.Dir)\node_modules")) {
-    Write-Host "$($app.Name): dependencies missing - run 'npm install' in $($app.Dir)\ first"
-    continue
-  }
+  Ensure-Dependencies $app.Dir $app.Name
   Start-Process -FilePath npm.cmd -ArgumentList 'run', 'dev' -WorkingDirectory "$root\$($app.Dir)" `
     -RedirectStandardOutput "$root\logs\$($app.Dir)-out.log" -RedirectStandardError "$root\logs\$($app.Dir)-err.log" -WindowStyle Hidden
   Start-Sleep -Seconds 4
@@ -72,7 +101,11 @@ foreach ($p in 5432, 4000, 5170, 5175, 5174, 5173) {
   if (Test-Port $p) { Write-Host "port $p OK" } else { Write-Host "port $p not listening - check $root\logs" }
 }
 Write-Host ''
-Write-Host 'Home:           http://localhost:5170'
-Write-Host 'Student portal: http://localhost:5175'
-Write-Host 'Teacher portal: http://localhost:5174'
-Write-Host 'Admin portal:   http://localhost:5173'
+Write-Host 'Host ports:'
+Write-Host '  PostgreSQL       localhost:5432'
+Write-Host '  API health       http://localhost:4000/api/health'
+Write-Host '  Public site      http://localhost:5170'
+Write-Host '  Student portal   http://localhost:5175'
+Write-Host '  Teacher portal   http://localhost:5174'
+Write-Host '  Admin console    http://localhost:5173'
+Write-Host ''

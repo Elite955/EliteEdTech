@@ -58,6 +58,8 @@ Requirements: Node.js 22+, PostgreSQL, npm.
 
    Or start each app manually with `npm run dev` inside `backend`, `home`, `student`, `teacher`, and `admin`.
 
+   `start-dev.ps1` installs missing dependencies automatically. If PostgreSQL is not already listening on port 5432, set `PG_CTL`, `PGDATA`, and optionally `PG_LOG_FILE` to your local installation; the script will otherwise look for PostgreSQL under your user profile. On Linux/macOS, `run-local.sh` accepts `PG_BIN_DIR`, `NODE_BIN_DIR`, `PGDATA`, and `PGSOCK` overrides. Vite proxies use `API_PROXY_TARGET` when set, so non-local API hosts are supported.
+
 4. Open the apps:
 
    | App | URL | Demo sign-in |

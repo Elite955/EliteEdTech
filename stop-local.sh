@@ -3,7 +3,10 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PATH="$HOME/.local/opt/pgsql/bin:$PATH"
+
+PG_BIN_DIR="${PG_BIN_DIR:-}"
+[ -n "$PG_BIN_DIR" ] && export PATH="$PG_BIN_DIR:$PATH"
+PGDATA="${PGDATA:-$HOME/.local/share/pgdata}"
 
 for name in admin teacher student home backend; do
   pidfile="$ROOT/logs/$name.pid"
@@ -26,5 +29,5 @@ for port in 4000 5170 5173 5174 5175; do
 done
 
 if [ "${1:-}" = "--with-db" ]; then
-  pg_ctl -D "$HOME/.local/share/pgdata" stop -m fast >/dev/null 2>&1 && echo "stopped PostgreSQL"
+  pg_ctl -D "$PGDATA" stop -m fast >/dev/null 2>&1 && echo "stopped PostgreSQL"
 fi

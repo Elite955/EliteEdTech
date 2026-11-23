@@ -3,10 +3,14 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PATH="$HOME/.local/opt/node-v26.13.1-linux-x64/bin:$HOME/.local/opt/pgsql/bin:$PATH"
 
-PGDATA="$HOME/.local/share/pgdata"
-PGSOCK="/tmp/opencode/pgsock"
+NODE_BIN_DIR="${NODE_BIN_DIR:-}"
+PG_BIN_DIR="${PG_BIN_DIR:-}"
+[ -n "$NODE_BIN_DIR" ] && export PATH="$NODE_BIN_DIR:$PATH"
+[ -n "$PG_BIN_DIR" ] && export PATH="$PG_BIN_DIR:$PATH"
+
+PGDATA="${PGDATA:-$HOME/.local/share/pgdata}"
+PGSOCK="${PGSOCK:-${TMPDIR:-/tmp}/edtech-pgsock-$(id -u 2>/dev/null || echo default)}"
 mkdir -p "$ROOT/logs" "$PGSOCK"
 
 # --- PostgreSQL ---------------------------------------------------------

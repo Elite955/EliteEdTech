@@ -20,7 +20,7 @@ async function request(path, options = {}) {
   try {
     res = await fetch(apiUrl(path), { ...options, headers, credentials: 'include' })
   } catch {
-    throw new ApiError(0, 'Cannot reach the server. Run start-dev.cmd in the one-to-one folder, then try again.')
+    throw new ApiError(0, 'Cannot reach the server. Run start-dev.cmd from the project root, then try again.')
   }
   let body = null
   try {
