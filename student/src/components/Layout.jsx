@@ -170,8 +170,11 @@ export default function Layout() {
           data-ui-sound="open"
           onClick={toggleChat}
         >
-          <Icon name="chat" size={19} />
-          <span>Chat</span>
+          <span className="chat-launcher-icon" aria-hidden="true">
+            <Icon name="chat" size={19} />
+            <span className="chat-launcher-live" />
+          </span>
+          <span className="chat-launcher-label">Community chat</span>
         </button>
       )}
       {profileDialogOpen && <ProfileDialog returnFocusRef={profileButtonRef} onClose={() => setProfileDialogOpen(false)} />}
