@@ -18,6 +18,14 @@ export async function startRazorpayCheckout(booking, user, { onSuccess } = {}) {
 
   const order = await api.post('/payments/order', { booking_id: booking.id })
 
+  // A teacher can set a ₹0 hourly rate; the server confirms the booking without
+  // Razorpay, so there is no checkout to open.
+  if (order.free) {
+    playUiSound('success')
+    await onSuccess?.()
+    return true
+  }
+
   return new Promise((resolve) => {
     const rzp = new window.Razorpay({
       key: order.key_id,

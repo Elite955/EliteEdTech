@@ -208,14 +208,14 @@ export function ProfileDialog({ onClose, returnFocusRef }: ProfileDialogProps) {
             <div className="profile-dialog-section">
               <h3><DollarSign size={16} /> Hourly rate</h3>
               <label className="profile-dialog-field profile-dialog-rate">
-                <span>Rate per hour</span>
+                <span>Rate per hour (₹0 - ₹4,999)</span>
                 <input
                   type="number"
                   value={hourlyRate}
                   onChange={(event) => setHourlyRate(event.target.value)}
                   min={0}
-                  max={100000}
-                  step={50}
+                  max={4999}
+                  step={1}
                   placeholder="500"
                 />
                 <small>Students see this rate. Booking amount = hours x rate.</small>

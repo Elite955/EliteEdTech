@@ -101,7 +101,7 @@ export function RegisterPage() {
               </label>
               <label className="block">
                 <span className="block text-sm font-medium text-slate-700 mb-1.5">Hourly rate (₹)</span>
-                <input required type="number" min={1} max={100000} value={form.hourlyRate} onChange={set('hourlyRate')} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="450" />
+                <input required type="number" min={0} max={4999} value={form.hourlyRate} onChange={set('hourlyRate')} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="450" />
               </label>
               <label className="block sm:col-span-2">
                 <span className="block text-sm font-medium text-slate-700 mb-1.5">Short bio</span>

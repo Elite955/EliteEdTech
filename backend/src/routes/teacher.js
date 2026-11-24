@@ -179,7 +179,7 @@ const profileUpdateSchema = z.object({
   phone: z.string().trim().max(20).nullable().optional(),
   bio: z.string().trim().max(600).nullable().optional(),
   subjects: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
-  hourlyRate: z.number().min(0).max(100000).nullable().optional(),
+  hourlyRate: z.number().min(0).max(4999).nullable().optional(),
 });
 
 teacherRouter.patch('/profile', requireAuthenticatedUser, requireTeacher, async (req, res, next) => {

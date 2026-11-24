@@ -265,6 +265,18 @@ Notes:
 4. Confirmation email should contain a `https://meet.jit.si/...` link and the PDF receipt attached
 5. Open the link in two tabs → both sides connect
 
+### Teacher hourly rate
+
+Teachers (and admins) can set any rate from **₹0 to ₹4,999 per hour**. It is
+enforced in the UI, the API validation, and a database CHECK constraint, so no
+path can store a rate outside that range. The booking amount is always computed
+server-side as `hours × rate`.
+
+A teacher who sets **₹0** offers free classes: the student skips Razorpay
+entirely, the booking is confirmed immediately, and the Jitsi link and receipt
+email are generated straight away. This is handled by `/api/payments/order`
+returning `{ "free": true }`; there is no zero-amount Razorpay order.
+
 ## Troubleshooting
 
 | Symptom | Cause |

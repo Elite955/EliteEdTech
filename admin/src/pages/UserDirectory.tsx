@@ -277,7 +277,7 @@ export function UserDirectory({ role }: { role: 'student' | 'teacher' }) {
               </> : <>
                 <label>Subjects <small>Separate subjects with commas.</small><input value={form.subjects} onChange={(event) => setForm({ ...form, subjects: event.target.value })} /></label>
                 <label>Short bio <small>Shown to students on the teacher profile. Up to 600 characters.</small><textarea rows={3} maxLength={600} value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })} /></label>
-                <label>Hourly rate (INR)<input type="number" min="0" step="0.01" value={form.hourlyRate} onChange={(event) => setForm({ ...form, hourlyRate: event.target.value })} /></label>
+                <label>Hourly rate (INR, 0-4999)<input type="number" min="0" max="4999" step="0.01" value={form.hourlyRate} onChange={(event) => setForm({ ...form, hourlyRate: event.target.value })} /></label>
               </>}
               {error && <div role="alert" className="form-error">{error}</div>}
               <div className="dialog-actions"><button type="button" className="secondary-button" onClick={() => { setDialogOpen(false); setEditingPerson(null) }}>Cancel</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving…' : editingPerson ? 'Save changes' : `Create ${role}`}</button></div>

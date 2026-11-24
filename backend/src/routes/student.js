@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import express from 'express';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import { pool } from '../db/pool.js';
 import { requireAuthenticatedUser } from '../security/authMiddleware.js';
 import { writeAudit } from '../security/audit.js';
@@ -310,10 +311,6 @@ studentRouter.post('/payments/order', requireAuthenticatedUser, requireStudent, 
   try {
     const parsed = orderSchema.safeParse(req.body);
     if (!parsed.success) return validationError(res, parsed);
-    if (!razorpayConfigured()) {
-      return res.status(503).json({ error: 'Payments are not configured yet. Ask your platform owner to add Razorpay test keys.' });
-    }
-
     const { rows } = await pool.query(
       `SELECT id, amount, status FROM bookings WHERE id = $1 AND student_id = $2`,
       [parsed.data.booking_id, req.auth.id],
@@ -322,6 +319,27 @@ studentRouter.post('/payments/order', requireAuthenticatedUser, requireStudent, 
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
     if (booking.status !== 'approved') {
       return res.status(400).json({ error: 'Only approved bookings can be paid for.' });
+    }
+
+    // A teacher may set a ₹0 rate. There is nothing for Razorpay to charge, so
+    // finalize the booking directly instead of creating an invalid zero order.
+    if (Number(booking.amount) === 0) {
+      const reference = `free_${randomUUID()}`;
+      await pool.query(
+        `INSERT INTO payments (booking_id, student_id, provider, provider_transaction_id, provider_order_id, amount, status)
+         VALUES ($1, $2, 'free', $3, $3, 0, 'pending')`,
+        [booking.id, req.auth.id, reference],
+      );
+      try {
+        await completePaidBooking(req, { bookingId: booking.id, orderId: reference, paymentId: reference });
+      } catch (error) {
+        console.error('Free booking finalization failed:', error.message);
+      }
+      return res.status(201).json({ free: true, status: 'paid', booking_id: booking.id });
+    }
+
+    if (!razorpayConfigured()) {
+      return res.status(503).json({ error: 'Payments are not configured yet. Ask your platform owner to add Razorpay test keys.' });
     }
 
     const order = await createOrder({

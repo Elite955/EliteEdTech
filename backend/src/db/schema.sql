@@ -22,9 +22,14 @@ CREATE TABLE IF NOT EXISTS teacher_profiles (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   subjects TEXT[] NOT NULL DEFAULT '{}',
   bio TEXT,
-  hourly_rate NUMERIC(10, 2) CHECK (hourly_rate IS NULL OR hourly_rate >= 0),
+  hourly_rate NUMERIC(10, 2) CHECK (hourly_rate IS NULL OR (hourly_rate >= 0 AND hourly_rate <= 4999)),
   approved BOOLEAN NOT NULL DEFAULT false
 );
+
+-- Teachers choose their own rate within the published INR 0-4999 range.
+ALTER TABLE teacher_profiles DROP CONSTRAINT IF EXISTS teacher_profiles_hourly_rate_check;
+ALTER TABLE teacher_profiles ADD CONSTRAINT teacher_profiles_hourly_rate_check
+  CHECK (hourly_rate IS NULL OR (hourly_rate >= 0 AND hourly_rate <= 4999));
 
 CREATE TABLE IF NOT EXISTS teacher_availability_slots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

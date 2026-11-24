@@ -23,7 +23,7 @@ const personSchema = z.object({
   age: z.number().int().min(1).max(120).optional().nullable(),
   grade: z.string().trim().max(80).optional().nullable(),
   subjects: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
-  hourlyRate: z.number().nonnegative().max(100000).optional().nullable(),
+  hourlyRate: z.number().nonnegative().max(4999).optional().nullable(),
   bio: z.string().trim().max(600).optional().nullable(),
 });
 const managedRecordSchema = z.object({
@@ -131,7 +131,7 @@ async function updatePerson(req, res, role) {
     age: z.number().int().min(1).max(120).nullable().optional(),
     grade: z.string().trim().max(80).nullable().optional(),
     subjects: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
-    hourlyRate: z.number().nonnegative().max(100000).nullable().optional(),
+    hourlyRate: z.number().nonnegative().max(4999).nullable().optional(),
     bio: z.string().trim().max(600).nullable().optional(),
   }).safeParse(req.body);
   if (!input.success) return validationError(res, input.error);

@@ -40,7 +40,7 @@ const registerSchema = z.object({
   password: z.string().min(12).max(128),
   age: z.number().int().min(1).max(120).optional(),
   grade: z.string().trim().max(40).optional(),
-  hourly_rate: z.number().min(1).max(100000).optional(),
+  hourly_rate: z.number().min(0).max(4999).optional(),
   subjects: z.array(z.string().trim().min(1).max(40)).min(1).max(8).optional(),
   bio: z.string().trim().max(600).optional(),
 });
