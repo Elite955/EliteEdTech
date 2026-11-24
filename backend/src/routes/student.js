@@ -514,6 +514,14 @@ studentRouter.post('/payments/verify', requireAuthenticatedUser, requireStudent,
   }
 });
 
+// Browsers open this URL with GET; explain instead of looking broken. Razorpay
+// calls the POST handler below with a signed body.
+studentRouter.get('/payments/webhook', (_req, res) => res.json({
+  endpoint: 'Razorpay webhook',
+  method: 'POST',
+  message: 'This URL accepts POST requests from Razorpay with a valid x-razorpay-signature header. Opening it in a browser uses GET, which is not used for webhooks.',
+}));
+
 studentRouter.post('/payments/webhook', express.raw({ type: 'application/json', limit: '256kb' }), async (req, res, next) => {
   try {
     const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body ?? '');
