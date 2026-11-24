@@ -6,11 +6,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://edtech-api.onrender.com/api/:path*"
+      "destination": "https://edtech-api-bvir.onrender.com/api/:path*"
     },
     {
       "source": "/socket.io/:path*",
-      "destination": "https://edtech-api.onrender.com/socket.io/:path*"
+      "destination": "https://edtech-api-bvir.onrender.com/socket.io/:path*"
     },
     {
       "source": "/(.*)",

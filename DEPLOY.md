@@ -17,7 +17,7 @@ Everything here runs on **$0 fixed cost**:
 Browser ──► https://student-xxx.vercel.app
                  │  /api/*  and  /socket.io/*  rewritten by vercel.json
                  ▼
-            https://edtech-api.onrender.com   (Express + Socket.IO)
+            https://edtech-api-bvir.onrender.com   (Express + Socket.IO)
                  │
                  ▼
             Neon Postgres (pooled)
@@ -92,7 +92,7 @@ DELETE FROM users WHERE email IN ('student@edtech.test','teacher1@edtech.test','
 
 1. https://render.com → **New** → **Blueprint** → pick this repo
 2. It reads `render.yaml` and creates **`edtech-api`** — keep that exact name,
-   the Vercel rewrites point at `https://edtech-api.onrender.com`
+   the Vercel rewrites point at `https://edtech-api-bvir.onrender.com`
 3. Fill in the `sync: false` variables:
 
 | Variable | Value |
@@ -110,7 +110,7 @@ regenerate them** — `FIELD_ENCRYPTION_KEY` decrypts stored MFA secrets.
 Verify:
 
 ```bash
-curl https://edtech-api.onrender.com/api/health
+curl https://edtech-api-bvir.onrender.com/api/health
 # {"status":"ok","database":"connected"}
 ```
 
