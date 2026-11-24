@@ -123,14 +123,6 @@ export function LoginPage() {
   return (
     <main className="login-page">
       {busy && <EliteLoader label="Signing in" />}
-      <header className="login-topbar">
-        <span className="login-topbar-brand">
-          <img src="/elite-logo-md.png" alt="Elite" />
-          <b>Admin console</b>
-        </span>
-        <span className="login-topbar-tag">Platform administration</span>
-      </header>
-      <div className="login-body">
       <section className="login-brand">
           <img className="brand-logo-img" src="/elite-logo-lg.png" alt="Elite" />
         <div className="brand-copy">
@@ -189,7 +181,6 @@ export function LoginPage() {
           <div className="login-security"><ShieldCheck size={15} /> Encrypted session · secure access</div>
         </div>
       </section>
-      </div>
     </main>
   )
 }
