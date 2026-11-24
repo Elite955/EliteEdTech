@@ -1,0 +1,75 @@
+# Render Blueprint — free tier.
+# The four Vite frontends live on Vercel and proxy /api here (see DEPLOY.md).
+services:
+  - type: web
+    name: edtech-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: PGSSLMODE
+        value: require
+      # Generated once by Render and kept stable. Never regenerate:
+      # FIELD_ENCRYPTION_KEY decrypts stored MFA secrets.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FIELD_ENCRYPTION_KEY
+        generateValue: true
+      # Free stack defaults: Jitsi rooms, no external meeting account needed.
+      - key: MEETING_PROVIDER
+        value: jitsi
+      - key: JITSI_TEST_MODE
+        value: "true"
+      # Fill these in the Render dashboard after creating the service.
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_ORIGIN
+        sync: false
+      - key: TEACHER_ORIGIN
+        sync: false
+      - key: STUDENT_ORIGIN
+        sync: false
+      - key: HOME_ORIGIN
+        sync: false
+      - key: BOOTSTRAP_ADMIN_NAME
+        value: Platform Administrator
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        value: whatsapp:+14155238886
+      - key: TWILIO_SANDBOX_MODE
+        value: "true"
+      - key: TWILIO_TEST_RECIPIENTS
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: RAZORPAY_TEST_MODE
+        value: "true"

@@ -225,7 +225,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const port = Number(process.env.API_PORT || 4000);
+const port = Number(process.env.PORT || process.env.API_PORT || 4000);
 server.listen(port, () => {
   console.log(`Elite admin API listening on http://localhost:${port}`);
 });

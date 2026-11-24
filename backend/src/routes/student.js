@@ -409,7 +409,9 @@ async function notifyPaidBooking(booking) {
 }
 
 async function finalizePaidBooking(result) {
-  const meeting = await ensureSessionMeeting(result.session.id);
+  // Create the join link at payment time so the confirmation email/WhatsApp
+  // already contains it, instead of waiting for the class to start.
+  const meeting = await ensureSessionMeeting(result.session.id, { allowBeforeStart: true });
   const delivery = await notifyPaidBooking(result.booking);
   return { ...result, meeting, delivery };
 }
