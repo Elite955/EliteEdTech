@@ -4,6 +4,7 @@ import { pool } from '../db/pool.js';
 import { requireAuthenticatedUser } from '../security/authMiddleware.js';
 import { writeAudit } from '../security/audit.js';
 import { ensureSessionMeeting } from '../meetings/service.js';
+import { selectedMeetingProviderId } from '../meetings/provider.js';
 import { sendBookingDetails } from '../notifications/notifier.js';
 
 export const teacherRouter = Router();
@@ -77,16 +78,18 @@ function sessionRowSql() {
 }
 
 function sessionPayload(row) {
+  const paid = ['paid', 'completed'].includes(row.booking_status);
   return {
     id: row.id,
     booking_id: row.booking_id,
     meeting_provider: row.meeting_provider,
-    meeting_url: row.meeting_url,
+    meeting_url: paid ? row.meeting_url : null,
+    canJoin: paid,
     meeting_creation_status: row.meeting_creation_status,
     status: row.status,
     started_at: row.started_at,
     ended_at: row.ended_at,
-    recording_url: row.recording_url,
+    recording_url: paid ? row.recording_url : null,
     recording_consent: row.recording_consent,
     created_at: row.created_at,
     teacher_id: row.teacher_id,
@@ -371,6 +374,22 @@ async function decideBooking(req, res, next, id, action) {
       [id],
     );
     const booking = bookingRows[0];
+    if (action === 'approve') {
+      // Create the room now, but keep it hidden until the payment succeeds.
+      let { rows: sessionRows } = await pool.query('SELECT id FROM class_sessions WHERE booking_id = $1', [id]);
+      if (!sessionRows.length) {
+        sessionRows = (await pool.query(
+          `INSERT INTO class_sessions (booking_id, meeting_provider, status)
+           VALUES ($1, $2, 'scheduled') RETURNING id`,
+          [id, selectedMeetingProviderId()],
+        )).rows;
+      }
+      try {
+        await ensureSessionMeeting(sessionRows[0].id, { allowBeforeStart: true });
+      } catch (error) {
+        console.error('Advance meeting creation failed:', error.message);
+      }
+    }
     const personResult = await pool.query(
       `SELECT u.id, u.name, u.email, u.phone, u.role
        FROM users u WHERE u.id = ANY($1::uuid[])`,
@@ -480,6 +499,9 @@ teacherRouter.post('/sessions/:id/meeting', requireAuthenticatedUser, requireTea
     if (!row) return res.status(404).json({ error: 'Class session not found.' });
     if (['cancelled', 'completed'].includes(row.status)) {
       return res.status(400).json({ error: 'This class is no longer available to join.' });
+    }
+    if (!['paid', 'completed'].includes(row.booking_status)) {
+      return res.status(403).json({ error: 'The student has not paid for this class yet.' });
     }
 
     const result = await ensureSessionMeeting(row.id, { allowBeforeStart: true });

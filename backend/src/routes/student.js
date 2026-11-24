@@ -418,12 +418,18 @@ async function markBookingPaid(req, { bookingId, orderId, paymentId }) {
   if (!rows.length) return null;
   const booking = rows[0];
 
-  const { rows: sessionRows } = await pool.query(
-    `INSERT INTO class_sessions (booking_id, meeting_provider, meeting_url, status)
-     VALUES ($1, $2, $3, 'scheduled') RETURNING id, meeting_url`,
-    [booking.id, selectedMeetingProviderId(), null],
+  let sessionRows = await pool.query(
+    'SELECT id, meeting_url FROM class_sessions WHERE booking_id = $1',
+    [booking.id],
   );
-  const session = sessionRows[0];
+  if (!sessionRows.rows.length) {
+    sessionRows = await pool.query(
+      `INSERT INTO class_sessions (booking_id, meeting_provider, meeting_url, status)
+       VALUES ($1, $2, NULL, 'scheduled') RETURNING id, meeting_url`,
+      [booking.id, selectedMeetingProviderId()],
+    );
+  }
+  const session = sessionRows.rows[0];
 
   return { booking, session };
 }
@@ -675,11 +681,17 @@ studentRouter.get('/sessions/mine', requireAuthenticatedUser, requireStudent, as
       [req.auth.id],
     );
     return res.json({
-      sessions: rows.map((row) => ({
-        ...row,
-        teacher: { name: row.teacher_name },
-        attendance_count: Number(row.attendance_count),
-      })),
+      sessions: rows.map((row) => {
+        const paid = ['paid', 'completed'].includes(row.booking_status);
+        return {
+          ...row,
+          meeting_url: paid ? row.meeting_url : null,
+          recording_url: paid ? row.recording_url : null,
+          canJoin: paid,
+          teacher: { name: row.teacher_name },
+          attendance_count: Number(row.attendance_count),
+        };
+      }),
     });
   } catch (error) {
     return next(error);
@@ -742,16 +754,20 @@ studentRouter.post('/sessions/:id/meeting', requireAuthenticatedUser, requireStu
     }
 
     const { rows: timingRows } = await pool.query(
-      `SELECT b.starts_at, b.ends_at FROM class_sessions cs
+      `SELECT b.starts_at, b.ends_at, b.status FROM class_sessions cs
        JOIN bookings b ON b.id = cs.booking_id
        WHERE cs.id = $1 AND b.student_id = $2`,
       [req.params.id, req.auth.id],
     );
     const timing = timingRows[0];
-    if (timing && Date.now() < new Date(timing.starts_at).getTime()) {
-      const seconds = Math.max(1, Math.ceil((new Date(timing.starts_at).getTime() - Date.now()) / 1000));
+    if (timing && !['paid', 'completed'].includes(timing.status)) {
+      return res.status(403).json({ error: 'Complete the payment before joining this class.' });
+    }
+    // Allow a 15-minute early join, and never block joining after the slot time.
+    if (timing && Date.now() < new Date(timing.starts_at).getTime() - 15 * 60 * 1000) {
+      const minutes = Math.ceil((new Date(timing.starts_at).getTime() - Date.now()) / 60000);
       return res.status(403).json({
-        error: `The session has not started yet. It starts in ${Math.floor(seconds / 60)}m ${seconds % 60}s.`,
+        error: `You can join 15 minutes before the class. It starts in about ${minutes} minutes.`,
       });
     }
 
