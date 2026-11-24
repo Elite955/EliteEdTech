@@ -1,7 +1,5 @@
 import nodemailer from 'nodemailer';
-import { isAllowedTwilioTestRecipient, isTwilioSandboxConfigured } from '../integrations/twilio.js';
-
-const TWILIO_API_BASE = 'https://api.twilio.com/2010-04-01';
+import { sendTelegramMessage, telegramChatForEmail, telegramConfigured } from '../integrations/telegram.js';
 
 function envValue(key) {
   const value = process.env[key];
@@ -23,12 +21,6 @@ function emailTestRecipients() {
     .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
 }
 
-function whatsappTestRecipientsConfigured() {
-  return envValue('TWILIO_TEST_RECIPIENTS')
-    .split(',')
-    .some((recipient) => /^\+[1-9]\d{7,14}$/.test(recipient.trim()));
-}
-
 export function notificationConfiguration() {
   const emailMissing = [];
   if (!envValue('SMTP_HOST')) emailMissing.push('SMTP_HOST');
@@ -37,56 +29,18 @@ export function notificationConfiguration() {
   if (!envValue('SMTP_FROM')) emailMissing.push('SMTP_FROM');
   if (testEnvironment() && !emailTestRecipients().length) emailMissing.push('BOOKING_EMAIL_TEST_RECIPIENTS');
 
-  const whatsappMissing = [];
-  if (!envValue('TWILIO_ACCOUNT_SID')) whatsappMissing.push('TWILIO_ACCOUNT_SID');
-  if (!envValue('TWILIO_AUTH_TOKEN')) whatsappMissing.push('TWILIO_AUTH_TOKEN');
-  if (!whatsappFrom()) whatsappMissing.push('TWILIO_WHATSAPP_FROM');
-  if (testEnvironment()) {
-    if (process.env.TWILIO_SANDBOX_MODE !== 'true') whatsappMissing.push('TWILIO_SANDBOX_MODE=true');
-    if (!isTwilioSandboxConfigured()) {
-      if (process.env.TWILIO_WHATSAPP_FROM !== 'whatsapp:+14155238886') {
-        whatsappMissing.push('TWILIO_WHATSAPP_FROM=whatsapp:+14155238886');
-      }
-      if (!whatsappTestRecipientsConfigured()) whatsappMissing.push('TWILIO_TEST_RECIPIENTS');
-    }
-  }
+  const telegramMissing = [];
+  if (!envValue('TELEGRAM_BOT_TOKEN')) telegramMissing.push('TELEGRAM_BOT_TOKEN');
+  if (!telegramConfigured()) telegramMissing.push('TELEGRAM_CHAT_ID or TELEGRAM_CHAT_IDS');
 
   return {
     email: { configured: emailMissing.length === 0, missingKeys: emailMissing },
-    whatsapp: { configured: whatsappMissing.length === 0, missingKeys: whatsappMissing },
+    telegram: { configured: telegramMissing.length === 0, missingKeys: telegramMissing },
   };
 }
 
 function smtpConfigured() {
   return notificationConfiguration().email.configured;
-}
-
-function twilioConfigured() {
-  return notificationConfiguration().whatsapp.configured;
-}
-
-function whatsappFrom() {
-  const value = envValue('TWILIO_WHATSAPP_FROM');
-  if (!value) return '';
-  return value.startsWith('whatsapp:') ? value : `whatsapp:${value}`;
-}
-
-export function normalizeWhatsAppNumber(value) {
-  if (!value) return null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  const digits = raw.replace(/[^\d+]/g, '');
-  if (!digits) return null;
-
-  let candidate;
-  if (digits.startsWith('+')) candidate = digits;
-  else if (/^0\d{10}$/.test(digits)) candidate = `+91${digits.slice(1)}`;
-  else if (/^\d{10}$/.test(digits)) candidate = `+91${digits}`;
-  else if (/^91\d{10}$/.test(digits)) candidate = `+${digits}`;
-  else if (/^\d{7,15}$/.test(digits)) candidate = `+${digits}`;
-  else return null;
-
-  return /^\+[1-9]\d{7,14}$/.test(candidate) ? candidate : null;
 }
 
 async function record(pool, { recipientId, channel, subject, body, status, providerId = null, bookingId = null, kind = 'booking_confirmation' }) {
@@ -151,55 +105,35 @@ async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind
   }
 }
 
-async function sendWhatsApp(pool, recipient, { subject, body, bookingId, kind = 'booking_confirmation' }) {
-  if (!twilioConfigured()) {
+async function sendTelegram(pool, recipient, { subject, body, bookingId, kind = 'booking_confirmation', receiptBuffer = null, receiptFilename = null }) {
+  if (!telegramConfigured()) {
     await record(pool, {
-      recipientId: recipient.id, channel: 'whatsapp', subject, body, status: 'skipped',
-      providerId: 'skipped: WhatsApp is not configured.', bookingId, kind,
+      recipientId: recipient.id, channel: 'telegram', subject, body, status: 'skipped',
+      providerId: 'skipped: Telegram is not configured.', bookingId, kind,
     });
-    return { recipientId: recipient.id, channel: 'whatsapp', status: 'skipped', error: 'WhatsApp is not configured.' };
+    return { recipientId: recipient.id, channel: 'telegram', status: 'skipped', error: 'Telegram is not configured.' };
   }
-  const phone = normalizeWhatsAppNumber(recipient.phone);
-  if (!phone) {
-    await record(pool, { recipientId: recipient.id, channel: 'whatsapp', subject, body, status: 'failed', bookingId, kind });
-    return {
-      recipientId: recipient.id,
-      channel: 'whatsapp',
-      status: 'failed',
-      error: recipient.phone ? 'Recipient phone number is not in a valid international format.' : 'Recipient has no phone number.',
-    };
-  }
-  if (testEnvironment() && !isAllowedTwilioTestRecipient(phone)) {
-    await record(pool, {
-      recipientId: recipient.id, channel: 'whatsapp', subject, body, status: 'skipped',
-      providerId: 'skipped: recipient is not on the WhatsApp test allowlist.', bookingId, kind,
-    });
-    return { recipientId: recipient.id, channel: 'whatsapp', status: 'skipped', error: 'Recipient is not on the WhatsApp test allowlist.' };
+  const chatId = telegramChatForEmail(recipient.email);
+  if (!chatId) {
+    await record(pool, { recipientId: recipient.id, channel: 'telegram', subject, body, status: 'failed', bookingId, kind });
+    return { recipientId: recipient.id, channel: 'telegram', status: 'failed', error: 'No Telegram chat ID is mapped to this recipient.' };
   }
   try {
-    const auth = Buffer.from(`${envValue('TWILIO_ACCOUNT_SID')}:${envValue('TWILIO_AUTH_TOKEN')}`).toString('base64');
-    const form = new URLSearchParams({
-      From: whatsappFrom(),
-      To: `whatsapp:${phone}`,
-      Body: body,
+    const { messageId } = await sendTelegramMessage({
+      chatId,
+      text: body,
+      document: receiptBuffer,
+      filename: receiptFilename ?? 'payment-receipt.pdf',
     });
-    const response = await fetch(`${TWILIO_API_BASE}/Accounts/${envValue('TWILIO_ACCOUNT_SID')}/Messages.json`, {
-      method: 'POST',
-      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form.toString(),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw new Error(`Twilio responded ${response.status}`);
-    const payload = await response.json();
     await record(pool, {
-      recipientId: recipient.id, channel: 'whatsapp', subject, body, status: 'sent',
-      providerId: payload.sid ?? null, bookingId, kind,
+      recipientId: recipient.id, channel: 'telegram', subject, body, status: 'sent',
+      providerId: messageId || null, bookingId, kind,
     });
-    return { recipientId: recipient.id, channel: 'whatsapp', status: 'sent', providerId: payload.sid ?? null };
+    return { recipientId: recipient.id, channel: 'telegram', status: 'sent', providerId: messageId || null };
   } catch (error) {
-    console.error('Booking WhatsApp delivery failed:', error.message);
-    await record(pool, { recipientId: recipient.id, channel: 'whatsapp', subject, body, status: 'failed', bookingId, kind });
-    return { recipientId: recipient.id, channel: 'whatsapp', status: 'failed', error: error.message };
+    console.error('Booking Telegram delivery failed:', error.message);
+    await record(pool, { recipientId: recipient.id, channel: 'telegram', subject, body, status: 'failed', bookingId, kind });
+    return { recipientId: recipient.id, channel: 'telegram', status: 'failed', error: error.message };
   }
 }
 
@@ -401,8 +335,15 @@ export async function sendBookingDetails(pool, recipients, context) {
           content: context.receiptBuffer,
         }]
       : [];
+    const hasReceipt = recipient.role === 'student' && Boolean(context.receiptBuffer);
     results.push(await sendEmail(pool, recipient, { ...copy, bookingId: context.bookingId, kind: context.kind ?? 'booking_confirmation', attachments }));
-    results.push(await sendWhatsApp(pool, recipient, { ...copy, bookingId: context.bookingId, kind: context.kind ?? 'booking_confirmation' }));
+    results.push(await sendTelegram(pool, recipient, {
+      ...copy,
+      bookingId: context.bookingId,
+      kind: context.kind ?? 'booking_confirmation',
+      receiptBuffer: hasReceipt ? context.receiptBuffer : null,
+      receiptFilename: context.receiptFilename,
+    }));
   }
   return results;
 }

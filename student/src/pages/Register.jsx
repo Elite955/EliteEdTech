@@ -74,7 +74,7 @@ export default function Register() {
               <input id="email" type="email" required value={form.email} onChange={set('email')} />
             </div>
             <div className="field">
-              <label htmlFor="phone">Phone (WhatsApp, optional)</label>
+              <label htmlFor="phone">Phone (optional)</label>
               <input id="phone" value={form.phone} onChange={set('phone')} />
             </div>
             <div className="field">

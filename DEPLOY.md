@@ -23,7 +23,7 @@ Everything here runs on **$0 fixed cost**:
 | 4 frontends | Vercel Hobby | static hosting (see ToS note) |
 | Meetings | Jitsi `meet.jit.si` | unlimited, no account |
 | Email | Gmail SMTP | 500 recipients/day |
-| WhatsApp | Twilio Sandbox | allowlisted numbers only |
+| Telegram | Bot API | unlimited, no verification, PDF attachments |
 | Payments | Razorpay test mode | unlimited test transactions |
 | Recording | — | not free (see note at the end) |
 
@@ -51,7 +51,7 @@ Create these accounts first (all free, no card except Razorpay KYC later):
 - [ ] **Render** — signed in with GitHub, repo access granted
 - [ ] **Vercel** — signed in with GitHub
 - [ ] **Gmail** — 2-Step Verification on, an **App Password** generated
-- [ ] **Twilio** — Account SID + Auth Token, your phone joined to the WhatsApp sandbox
+- [ ] **Telegram** — bot token from @BotFather + your chat ID
 - [ ] **Razorpay** — test `key_id` + `key_secret`
 - [ ] A strong admin password (12+ characters)
 
@@ -114,7 +114,7 @@ DELETE FROM users WHERE email IN ('student@edtech.test','teacher1@edtech.test','
 | `DATABASE_URL` | Neon **pooled** string |
 | `BOOTSTRAP_ADMIN_*` | same values you seeded with |
 | `SMTP_*` | see step 5 |
-| `TWILIO_*` | see step 6 |
+| `TELEGRAM_*` | see step 6 |
 | `RAZORPAY_KEY_ID` / `_SECRET` | your test keys |
 | `ADMIN/TEACHER/STUDENT/HOME_ORIGIN` | fill after step 4 |
 
@@ -177,31 +177,35 @@ Limits: 500 recipients/day, From must be that Gmail. When volume grows, switch
 to a free transactional provider (Brevo ~300/day, Resend ~100/day) — same SMTP
 variables, different host.
 
-## 6. WhatsApp (free sandbox)
+## 6. Telegram (free messaging)
 
-1. https://console.twilio.com → Messaging → **Try it out → Send a WhatsApp message**
-2. From your phone, send the shown `join <code>` to **+1 415 523 8886**
-3. Set on Render:
+WhatsApp needs Meta verification and per-message fees; Telegram Bot API is
+completely free and can attach the PDF receipt directly.
+
+1. Open Telegram → message **@BotFather** → `/newbot` → follow the prompts → copy
+   the bot token
+2. Message your new bot once (send `/start`)
+3. Get your chat ID by opening `https://api.telegram.org/<BOT_TOKEN>/getUpdates`
+   in a browser and copying the `"chat":{"id":...` value
+4. Set on Render:
 
 ```
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=...
-TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-TWILIO_SANDBOX_MODE=true
-TWILIO_TEST_RECIPIENTS=+91XXXXXXXXXX
+TELEGRAM_BOT_TOKEN=123456:AA...
+TELEGRAM_CHAT_ID=123456789
+# Optional: per-student chat IDs, e.g. student@example.com:123456789,teacher@example.com:987654321
+TELEGRAM_CHAT_IDS=
 ```
 
-Only numbers that joined the sandbox receive messages. This is fine for demos.
-Production needs Meta business verification + an approved **utility template**,
-and costs about **₹0.115 per message** in India after the first 1,000 free
-service messages/month.
+`TELEGRAM_CHAT_IDS` overrides `TELEGRAM_CHAT_ID` for those email addresses.
+Each student receives their own receipt PDF and join link; anyone without a
+mapping falls back to the single demo chat ID.
 
 ## 7. End-to-end test
 
 1. Student registers → enrolls authenticator
 2. Books a slot, teacher approves
 3. Student pays with a Razorpay test card (`4111 1111 1111 1111`, any future date, any CVV)
-4. Confirmation email + WhatsApp should contain a `https://meet.jit.si/...` link
+4. Confirmation email + Telegram message should contain a `https://meet.jit.si/...` link, and the email should have the PDF receipt attached
 5. Open the link in two tabs → both sides connect
 
 ## Troubleshooting
@@ -211,7 +215,7 @@ service messages/month.
 | Logged in but every page 401s | `/api` rewrite missing or `*_ORIGIN` wrong |
 | `Google Meet is not configured` | `MEETING_PROVIDER=google_meet` without OAuth keys; use `jitsi` |
 | Emails never arrive | SMTP empty — check Render logs for `skipped` |
-| WhatsApp silent | number not joined to sandbox / not in `TWILIO_TEST_RECIPIENTS` |
+| Telegram silent | bot token/chat ID missing, or you never sent `/start` to the bot |
 | First request takes 40 s | Render free tier woke from sleep (normal) |
 | `relation "..." does not exist` | migration not run against this database |
 | Upload/first login fails after redeploy | `FIELD_ENCRYPTION_KEY` changed |

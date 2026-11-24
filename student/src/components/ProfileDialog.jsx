@@ -164,7 +164,7 @@ export default function ProfileDialog({ onClose, returnFocusRef }) {
                   placeholder="+91 98765 43210"
                   autoComplete="tel"
                 />
-                <p className="field-hint">Used for WhatsApp class updates.</p>
+                <p className="field-hint">Used for account verification and support.</p>
               </div>
               <div className="field">
                 <label htmlFor="dialog-profile-age">Age</label>

@@ -224,7 +224,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   request_id UUID,
   recipient_id UUID REFERENCES users(id),
-  channel TEXT NOT NULL CHECK (channel IN ('email', 'whatsapp', 'in_app')),
+  channel TEXT NOT NULL CHECK (channel IN ('email', 'telegram', 'whatsapp', 'in_app')),
   subject TEXT NOT NULL,
   body TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sent', 'failed', 'skipped')),
@@ -235,6 +235,12 @@ CREATE TABLE IF NOT EXISTS notifications (
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS request_id UUID;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'booking_confirmation';
+
+-- Telegram replaced WhatsApp as the free messaging channel. Keep the old
+-- constraint name in case this database was created from an earlier schema.
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_channel_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check
+  CHECK (channel IN ('email', 'telegram', 'whatsapp', 'in_app'));
 
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_kind_check;
 ALTER TABLE notifications

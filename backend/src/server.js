@@ -55,7 +55,7 @@ app.get('/api/integrations/status', (_req, res) => {
     payments: { razorpay: razorpayConfigured(), testMode: process.env.RAZORPAY_TEST_MODE !== 'false' },
     meetings: { provider: selectedMeetingProviderId() },
     email: { configured: notifications.email.configured, missingKeys: notifications.email.missingKeys },
-    whatsapp: { configured: notifications.whatsapp.configured, missingKeys: notifications.whatsapp.missingKeys },
+    telegram: { configured: notifications.telegram.configured, missingKeys: notifications.telegram.missingKeys },
   });
 });
 

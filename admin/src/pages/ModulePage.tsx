@@ -13,7 +13,7 @@ type OfflinePaymentResult = {
   missingKeys?: string[]
   configuration?: {
     email?: { missingKeys?: string[] }
-    whatsapp?: { missingKeys?: string[] }
+    telegram?: { missingKeys?: string[] }
   } | null
   delivery: { channel: string; status: string; error?: string | null }[]
 }
@@ -33,7 +33,7 @@ const moduleInfo: Record<string, { title: string; description: string; editable?
   activity_logs: { title: 'Administrative activity logs', description: 'A chronological audit trail of administrative actions.' },
   notifications: { title: 'Notification centre', description: 'Review delivery status and send a single test message to an explicitly allowlisted Twilio sandbox recipient.' },
   announcements: { title: 'Announcements', description: 'Create announcement records. Delivery is not sent until a notification provider workflow is configured.', editable: true },
-  templates: { title: 'Message templates', description: 'Manage reusable email and WhatsApp message template records.', editable: true },
+  templates: { title: 'Message templates', description: 'Manage reusable email and Telegram message template records.', editable: true },
   configuration: { title: 'Platform configuration', description: 'Manage selected non-secret platform settings. Secrets belong in environment configuration, never here.' },
   integrations: { title: 'Integrations', description: 'Provider test-mode readiness is checked from environment configuration; secrets are never displayed.' },
   security: { title: 'Security management', description: 'Review security events and administrative access activity.' },
@@ -65,7 +65,7 @@ export function ModulePage() {
   const [editingItem, setEditingItem] = useState<ModuleRecord | null>(null)
   const [editValue, setEditValue] = useState('')
   const [form, setForm] = useState({ title: '', status: 'active', description: '' })
-  const [whatsAppForm, setWhatsAppForm] = useState({ to: '', body: '' })
+  const [telegramForm, setTelegramForm] = useState({ to: '', body: '' })
   const [recordingBooking, setRecordingBooking] = useState<ModuleRecord | null>(null)
   const [transactionReference, setTransactionReference] = useState('')
   const [paymentVerified, setPaymentVerified] = useState(false)
@@ -114,16 +114,16 @@ export function ModulePage() {
       const missingKeys = [
         ...(result.missingKeys ?? []),
         ...(result.configuration?.email?.missingKeys ?? []),
-        ...(result.configuration?.whatsapp?.missingKeys ?? []),
+        ...(result.configuration?.telegram?.missingKeys ?? []),
       ]
       if (!['created', 'existing'].includes(result.meetingStatus)) {
         const missing = missingKeys.length ? ` Missing setup: ${[...new Set(missingKeys)].join(', ')}.` : ''
         setNotice(`Payment recorded. Meeting link status: ${result.meetingStatus.replaceAll('_', ' ')}.${missing} ${result.meetingError ?? ''}`.trim())
       } else {
-        const delivery = ['email', 'whatsapp'].map((channel) => {
+        const delivery = ['email', 'telegram'].map((channel) => {
           const item = result.delivery.find((entry) => entry.channel === channel)
           const error = item?.error ? ` (${item.error})` : ''
-          return `${channel === 'email' ? 'Email' : 'WhatsApp'}: ${item?.status ?? 'not sent'}${error}`
+          return `${channel === 'email' ? 'Email' : 'Telegram'}: ${item?.status ?? 'not sent'}${error}`
         })
         const missing = missingKeys.length ? ` Missing setup: ${[...new Set(missingKeys)].join(', ')}.` : ''
         setNotice(`Payment recorded and meeting link created. ${delivery.join(' · ')}.${missing} ${result.meetingError ?? ''}`.trim())
@@ -236,20 +236,20 @@ export function ModulePage() {
     } finally { setExporting('') }
   }
 
-  async function sendTestWhatsApp(event: FormEvent<HTMLFormElement>) {
+  async function sendTestTelegram(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!window.confirm(`Queue a WhatsApp sandbox test message to ${whatsAppForm.to}? Only server-allowlisted test recipients are accepted.`)) return
+    if (!window.confirm(`Send a Telegram test message to chat ${telegramForm.to}? Only chat IDs configured on the server are accepted.`)) return
     setSaving(true)
     setError('')
     setNotice('')
     try {
-      const result = await api<{ status: string }>('/admin/notifications/test-whatsapp', {
+      const result = await api<{ status: string }>('/admin/notifications/test-telegram', {
         method: 'POST',
-        body: JSON.stringify({ ...whatsAppForm, requestId: crypto.randomUUID() }),
+        body: JSON.stringify({ chatId: telegramForm.to, body: telegramForm.body, requestId: crypto.randomUUID() }),
       })
-      setNotice(`WhatsApp test message status: ${result.status}.`)
+      setNotice(`Telegram test message status: ${result.status}.`)
       celebrate('Test message queued', `Status: ${result.status}`)
-      setWhatsAppForm((current) => ({ ...current, body: '' }))
+      setTelegramForm((current) => ({ ...current, body: '' }))
       await load()
     } catch (requestError) {
       playUiSound('error')
@@ -286,13 +286,13 @@ export function ModulePage() {
     } finally { setSaving(false) }
   }
 
-  async function refreshWhatsAppStatus(item: ModuleRecord) {
+  async function refreshTelegramStatus(item: ModuleRecord) {
     setSaving(true)
     setError('')
     setNotice('')
     try {
-      const result = await api<{ status: string }>(`/admin/notifications/${item.id}/test-status`)
-      setNotice(`WhatsApp message status: ${result.status}.`)
+      const result = await api<{ status: string }>(`/admin/notifications/${item.id}/telegram-status`)
+      setNotice(`Telegram message status: ${result.status}.`)
       await load()
     } catch (requestError) {
       setError(getErrorMessage(requestError))
@@ -350,10 +350,10 @@ export function ModulePage() {
       {error && <div role="alert" className="alert alert-error">{error}</div>}
       {notice && <div role="status" className="alert alert-success">{notice}</div>}
       {module === 'notifications' && can('notifications', 'manage') && (
-        <form className="panel dialog-form" onSubmit={(event) => void sendTestWhatsApp(event)}>
-          <div className="dialog-heading"><div><p className="eyebrow">TEST MODE ONLY</p><h3>Send WhatsApp sandbox message</h3></div><MessageCircle size={18} /></div>
-          <label>Approved test recipient (E.164)<input type="tel" required pattern="\+[1-9][0-9]{7,14}" placeholder="+15551234567" value={whatsAppForm.to} onChange={(event) => setWhatsAppForm({ ...whatsAppForm, to: event.target.value })} /></label>
-          <label>Message<textarea required maxLength={1600} rows={3} value={whatsAppForm.body} onChange={(event) => setWhatsAppForm({ ...whatsAppForm, body: event.target.value })} /></label>
+        <form className="panel dialog-form" onSubmit={(event) => void sendTestTelegram(event)}>
+          <div className="dialog-heading"><div><p className="eyebrow">CONFIGURED CHAT ID</p><h3>Send Telegram test message</h3></div><MessageCircle size={18} /></div>
+          <label>Configured chat ID<input required maxLength={64} placeholder="123456789" value={telegramForm.to} onChange={(event) => setTelegramForm({ ...telegramForm, to: event.target.value })} /></label>
+          <label>Message<textarea required maxLength={1000} rows={3} value={telegramForm.body} onChange={(event) => setTelegramForm({ ...telegramForm, body: event.target.value })} /></label>
           <small>The backend rejects recipients not explicitly listed in `TWILIO_TEST_RECIPIENTS`. Network errors are marked unknown to avoid accidental duplicate sends.</small>
           <button type="submit" className="primary-button" disabled={saving}><MessageCircle size={15} /> {saving ? 'Sending…' : 'Send test message'}</button>
         </form>
@@ -379,7 +379,7 @@ export function ModulePage() {
                   {canRecordPayment && item.status === 'approved' && <button className="table-action" disabled={saving} onClick={() => { setRecordingBooking(item); setTransactionReference(''); setPaymentVerified(false); setError('') }}>Record bank transfer</button>}
                   {canCreateMeeting && item.status === 'scheduled' && !item.data?.meetingUrl && !['creating', 'created', 'unknown'].includes(String(item.data?.meetingCreationStatus)) && <button className="table-action" disabled={saving} onClick={() => void createTestMeeting(item)}><Video size={12} /> Create meeting link</button>}
                   {canRefreshRefund && ['pending', 'unknown'].includes(item.status) && Boolean(item.data?.providerRefundId) && <button className="table-action" disabled={saving} onClick={() => void refreshRefundStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
-                  {canRefreshNotification && ['queued', 'unknown'].includes(item.status) && Boolean(item.data?.providerId) && <button className="table-action" disabled={saving} onClick={() => void refreshWhatsAppStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
+                  {canRefreshNotification && ['queued', 'unknown'].includes(item.status) && Boolean(item.data?.providerId) && <button className="table-action" disabled={saving} onClick={() => void refreshTelegramStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
                   {canDeleteRecords && <button className="table-action danger-action" disabled={saving} onClick={() => void deleteRecord(item)}><Trash2 size={12} /> {module === 'recordings' ? 'Delete recording' : 'Delete class'}</button>}
                 </td>}
               </tr>
@@ -413,7 +413,7 @@ export function ModulePage() {
               <p>{recordingBooking.title} · Rs. {readableValue(recordingBooking.data?.amount)}</p>
               <label>Bank transaction reference<input required minLength={3} maxLength={128} value={transactionReference} onChange={(event) => setTransactionReference(event.target.value)} /></label>
               <label className="check-label"><input type="checkbox" checked={paymentVerified} onChange={(event) => setPaymentVerified(event.target.checked)} /> I verified this transfer was received.</label>
-              <small>Recording is permanent and audited. If meeting, email, or WhatsApp test setup is missing, payment will still be recorded and delivery can be retried from Meeting checks.</small>
+              <small>Recording is permanent and audited. If meeting, email, or Telegram test setup is missing, payment will still be recorded and delivery can be retried from Meeting checks.</small>
               {error && <div role="alert" className="form-error">{error}</div>}
               <div className="dialog-actions">
                 <button type="button" className="secondary-button" disabled={saving} onClick={() => setRecordingBooking(null)}>Cancel</button>

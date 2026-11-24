@@ -170,7 +170,7 @@ export function ProfileDialog({ onClose, returnFocusRef }: ProfileDialogProps) {
                     placeholder="+91 98765 43210"
                     autoComplete="tel"
                   />
-                  <small>Used for WhatsApp class updates.</small>
+                  <small>Used for account verification and support.</small>
                 </label>
               </div>
               <label className="profile-dialog-field">

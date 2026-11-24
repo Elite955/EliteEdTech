@@ -31,7 +31,7 @@ type MeetingSession = {
   amount: number
   student: { id: string; name: string; email: string; phone: string | null }
   teacher: { id: string; name: string; email: string; phone: string | null }
-  notifications: { email: NotificationSummary; whatsapp: NotificationSummary }
+  notifications: { email: NotificationSummary; telegram: NotificationSummary }
 }
 
 type UnlinkedBooking = {
@@ -49,7 +49,7 @@ type MeetingChecksData = {
   configuration: {
     meetingProvider: ConfigurationFlag & { id: string; title: string }
     email: ConfigurationFlag
-    whatsapp: ConfigurationFlag
+    telegram: ConfigurationFlag
   }
   sessions: MeetingSession[]
   unlinkedPaidBookings: UnlinkedBooking[]
@@ -216,7 +216,7 @@ export function MeetingChecks() {
     ? [
       !data.configuration.meetingProvider.configured ? data.configuration.meetingProvider.title : null,
       !data.configuration.email.configured ? 'email' : null,
-      !data.configuration.whatsapp.configured ? 'WhatsApp' : null,
+      !data.configuration.telegram.configured ? 'Telegram' : null,
     ].filter(Boolean)
     : []
 
@@ -240,7 +240,7 @@ export function MeetingChecks() {
       {notice && <div role="status" className="alert alert-success">{notice}</div>}
       {missingConfiguration.length > 0 && (
         <div className="alert alert-info">
-          Setup still needs {missingConfiguration.join(', ')}. The selected meeting provider is required to create new links; email and WhatsApp setup is required to send messages. Existing meeting links can still be sent.
+          Setup still needs {missingConfiguration.join(', ')}. The selected meeting provider is required to create new links; email and Telegram setup is required to send messages. Existing meeting links can still be sent.
         </div>
       )}
 
@@ -261,9 +261,9 @@ export function MeetingChecks() {
             description="Sends the session date, time, and join link to both people."
           />
           <ConfigurationCard
-            title="WhatsApp"
+            title="Telegram"
             icon={<MessageCircle size={17} />}
-            state={data.configuration.whatsapp}
+            state={data.configuration.telegram}
             description="Sends the same details to the student and teacher phone numbers."
           />
         </div>
@@ -273,7 +273,7 @@ export function MeetingChecks() {
         <CalendarClock size={18} />
         <div>
           <strong>How to check a booking</strong>
-          <p>Create the meeting link, send the join details, then ask the student and teacher to confirm they received the email and WhatsApp message. Both messages carry the same link.</p>
+          <p>Create the meeting link, send the join details, then ask the student and teacher to confirm they received the email and Telegram message. Both messages carry the same link.</p>
         </div>
       </div>
 
@@ -324,7 +324,7 @@ export function MeetingChecks() {
                     <td>
                       <div className="delivery-lines">
                         <span><Mail size={12} /> Email <em className={`status-pill ${deliveryClass(session.notifications.email)}`}>{deliveryLabel(session.notifications.email)}</em></span>
-                        <span><MessageCircle size={12} /> WhatsApp <em className={`status-pill ${deliveryClass(session.notifications.whatsapp)}`}>{deliveryLabel(session.notifications.whatsapp)}</em></span>
+                        <span><MessageCircle size={12} /> Telegram <em className={`status-pill ${deliveryClass(session.notifications.telegram)}`}>{deliveryLabel(session.notifications.telegram)}</em></span>
                       </div>
                     </td>
                     <td className="align-right">

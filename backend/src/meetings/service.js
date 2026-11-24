@@ -194,14 +194,14 @@ export async function sendSessionJoinDetails(sessionId, {
     },
   ].filter((recipient) => !studentOnly || recipient.role === 'student');
 
-  if (!configuration.email.configured && !configuration.whatsapp.configured) {
+  if (!configuration.email.configured && !configuration.telegram.configured) {
     return {
       status: 'not_configured',
-      error: 'Email and WhatsApp are not configured.',
+      error: 'Email and Telegram are not configured.',
       configuration,
       missingKeys: [
         ...configuration.email.missingKeys,
-        ...configuration.whatsapp.missingKeys,
+        ...configuration.telegram.missingKeys,
       ],
       meetingStatus: meeting?.status ?? 'existing',
       session: row,
@@ -218,10 +218,10 @@ export async function sendSessionJoinDetails(sessionId, {
 function summarizeNotifications(rows) {
   const summary = {
     email: { lastStatus: null, sent: 0, failed: 0, queued: 0, unknown: 0 },
-    whatsapp: { lastStatus: null, sent: 0, failed: 0, queued: 0, unknown: 0 },
+    telegram: { lastStatus: null, sent: 0, failed: 0, queued: 0, unknown: 0 },
   };
   for (const row of rows) {
-    const channel = row.channel === 'whatsapp' ? 'whatsapp' : row.channel === 'email' ? 'email' : null;
+    const channel = row.channel === 'telegram' ? 'telegram' : row.channel === 'email' ? 'email' : null;
     if (!channel) continue;
     if (!summary[channel].lastStatus) summary[channel].lastStatus = row.status;
     if (Object.hasOwn(summary[channel], row.status)) summary[channel][row.status] += 1;
@@ -279,7 +279,7 @@ export async function loadMeetingChecks() {
     configuration: {
       meetingProvider,
       email: messaging.email,
-      whatsapp: messaging.whatsapp,
+      telegram: messaging.telegram,
     },
     sessions: rows.map((row) => ({
       id: row.id,
