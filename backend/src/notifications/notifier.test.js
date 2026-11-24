@@ -54,7 +54,7 @@ test('paid student confirmation includes the meeting link in the email action', 
   assert.match(copy.html, />Join your class</);
 });
 
-test('development join notifications skip recipients outside the email and WhatsApp test allowlists', async () => {
+test('development join notifications skip recipients outside the email test allowlist', async () => {
   const keys = [
     'NODE_ENV',
     'SMTP_HOST',
@@ -62,11 +62,6 @@ test('development join notifications skip recipients outside the email and Whats
     'SMTP_PASSWORD',
     'SMTP_FROM',
     'BOOKING_EMAIL_TEST_RECIPIENTS',
-    'TWILIO_ACCOUNT_SID',
-    'TWILIO_AUTH_TOKEN',
-    'TWILIO_WHATSAPP_FROM',
-    'TWILIO_SANDBOX_MODE',
-    'TWILIO_TEST_RECIPIENTS',
   ];
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   Object.assign(process.env, {
@@ -76,11 +71,6 @@ test('development join notifications skip recipients outside the email and Whats
     SMTP_PASSWORD: 'test-password',
     SMTP_FROM: 'noreply@example.test',
     BOOKING_EMAIL_TEST_RECIPIENTS: 'allowed@example.test',
-    TWILIO_ACCOUNT_SID: 'AC-test',
-    TWILIO_AUTH_TOKEN: 'test-token',
-    TWILIO_WHATSAPP_FROM: 'whatsapp:+14155238886',
-    TWILIO_SANDBOX_MODE: 'true',
-    TWILIO_TEST_RECIPIENTS: '+15551234567',
   });
 
   try {
@@ -89,7 +79,7 @@ test('development join notifications skip recipients outside the email and Whats
       [{ ...recipient, email: 'not-allowed@example.test', phone: '+15550000000' }],
       { ...context, directMeetingLinkForStudent: true },
     );
-    assert.deepEqual(result.map((item) => item.status), ['skipped', 'skipped']);
+    assert.deepEqual(result.map((item) => item.status), ['skipped']);
   } finally {
     for (const key of keys) {
       if (previous[key] === undefined) delete process.env[key];

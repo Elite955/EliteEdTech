@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
-import { Download, FileText, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Video, X } from 'lucide-react'
+import { Download, FileText, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Video, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import { useSuccessBurst } from '../components/useSuccessBurst'
 import { api, apiUrl, getErrorMessage } from '../lib/api'
@@ -13,7 +13,6 @@ type OfflinePaymentResult = {
   missingKeys?: string[]
   configuration?: {
     email?: { missingKeys?: string[] }
-    telegram?: { missingKeys?: string[] }
   } | null
   delivery: { channel: string; status: string; error?: string | null }[]
 }
@@ -31,9 +30,9 @@ const moduleInfo: Record<string, { title: string; description: string; editable?
   attendance: { title: 'Attendance', description: 'Class attendance records supplied by the session workflow.' },
   reports: { title: 'Reports & analytics', description: 'Download an aggregate admin-operations summary as PDF or XLSX; review report definitions here.', editable: true },
   activity_logs: { title: 'Administrative activity logs', description: 'A chronological audit trail of administrative actions.' },
-  notifications: { title: 'Notification centre', description: 'Review delivery status and send a single test message to an explicitly allowlisted Twilio sandbox recipient.' },
+  notifications: { title: 'Notification centre', description: 'Review email delivery status for booking confirmations and join links.' },
   announcements: { title: 'Announcements', description: 'Create announcement records. Delivery is not sent until a notification provider workflow is configured.', editable: true },
-  templates: { title: 'Message templates', description: 'Manage reusable email and Telegram message template records.', editable: true },
+  templates: { title: 'Message templates', description: 'Manage reusable email message template records.', editable: true },
   configuration: { title: 'Platform configuration', description: 'Manage selected non-secret platform settings. Secrets belong in environment configuration, never here.' },
   integrations: { title: 'Integrations', description: 'Provider test-mode readiness is checked from environment configuration; secrets are never displayed.' },
   security: { title: 'Security management', description: 'Review security events and administrative access activity.' },
@@ -65,7 +64,6 @@ export function ModulePage() {
   const [editingItem, setEditingItem] = useState<ModuleRecord | null>(null)
   const [editValue, setEditValue] = useState('')
   const [form, setForm] = useState({ title: '', status: 'active', description: '' })
-  const [telegramForm, setTelegramForm] = useState({ to: '', body: '' })
   const [recordingBooking, setRecordingBooking] = useState<ModuleRecord | null>(null)
   const [transactionReference, setTransactionReference] = useState('')
   const [paymentVerified, setPaymentVerified] = useState(false)
@@ -75,7 +73,6 @@ export function ModulePage() {
   const canRecordPayment = module === 'bookings' && can('transactions', 'record_payment')
   const canCreateMeeting = module === 'live_classes' && can('live_classes', 'manage')
   const canRefreshRefund = module === 'refunds' && can('refunds', 'manage')
-  const canRefreshNotification = module === 'notifications' && can('notifications', 'manage')
   const canExportReport = module === 'reports' && can('reports', 'export')
   const canDeleteRecords = ['live_classes', 'recordings'].includes(module) && can(module, 'delete')
   const filtered = useMemo(() => {
@@ -114,16 +111,15 @@ export function ModulePage() {
       const missingKeys = [
         ...(result.missingKeys ?? []),
         ...(result.configuration?.email?.missingKeys ?? []),
-        ...(result.configuration?.telegram?.missingKeys ?? []),
       ]
       if (!['created', 'existing'].includes(result.meetingStatus)) {
         const missing = missingKeys.length ? ` Missing setup: ${[...new Set(missingKeys)].join(', ')}.` : ''
         setNotice(`Payment recorded. Meeting link status: ${result.meetingStatus.replaceAll('_', ' ')}.${missing} ${result.meetingError ?? ''}`.trim())
       } else {
-        const delivery = ['email', 'telegram'].map((channel) => {
+        const delivery = ['email'].map((channel) => {
           const item = result.delivery.find((entry) => entry.channel === channel)
           const error = item?.error ? ` (${item.error})` : ''
-          return `${channel === 'email' ? 'Email' : 'Telegram'}: ${item?.status ?? 'not sent'}${error}`
+          return `Email: ${item?.status ?? 'not sent'}${error}`
         })
         const missing = missingKeys.length ? ` Missing setup: ${[...new Set(missingKeys)].join(', ')}.` : ''
         setNotice(`Payment recorded and meeting link created. ${delivery.join(' · ')}.${missing} ${result.meetingError ?? ''}`.trim())
@@ -236,27 +232,6 @@ export function ModulePage() {
     } finally { setExporting('') }
   }
 
-  async function sendTestTelegram(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!window.confirm(`Send a Telegram test message to chat ${telegramForm.to}? Only chat IDs configured on the server are accepted.`)) return
-    setSaving(true)
-    setError('')
-    setNotice('')
-    try {
-      const result = await api<{ status: string }>('/admin/notifications/test-telegram', {
-        method: 'POST',
-        body: JSON.stringify({ chatId: telegramForm.to, body: telegramForm.body, requestId: crypto.randomUUID() }),
-      })
-      setNotice(`Telegram test message status: ${result.status}.`)
-      celebrate('Test message queued', `Status: ${result.status}`)
-      setTelegramForm((current) => ({ ...current, body: '' }))
-      await load()
-    } catch (requestError) {
-      playUiSound('error')
-      setError(getErrorMessage(requestError))
-    } finally { setSaving(false) }
-  }
-
   async function requestTestRefund(item: ModuleRecord) {
     if (!window.confirm(`Request a full test-mode refund for payment ${item.title}? This cannot be undone in the provider test account.`)) return
     setSaving(true)
@@ -280,19 +255,6 @@ export function ModulePage() {
     try {
       const result = await api<{ status: string }>(`/admin/refunds/${item.id}/status`)
       setNotice(`Refund status: ${result.status}.`)
-      await load()
-    } catch (requestError) {
-      setError(getErrorMessage(requestError))
-    } finally { setSaving(false) }
-  }
-
-  async function refreshTelegramStatus(item: ModuleRecord) {
-    setSaving(true)
-    setError('')
-    setNotice('')
-    try {
-      const result = await api<{ status: string }>(`/admin/notifications/${item.id}/telegram-status`)
-      setNotice(`Telegram message status: ${result.status}.`)
       await load()
     } catch (requestError) {
       setError(getErrorMessage(requestError))
@@ -334,7 +296,7 @@ export function ModulePage() {
 
   if (!info) return <div className="alert alert-error">This admin module is not recognized.</div>
   const canCreate = info.editable && editableModules.has(module) && can(module, 'create')
-  const hasRowActions = canRefund || canRecordPayment || canCreateMeeting || canRefreshRefund || canRefreshNotification || canDeleteRecords
+  const hasRowActions = canRefund || canRecordPayment || canCreateMeeting || canRefreshRefund || canDeleteRecords
 
   return (
     <div className="module-page">
@@ -349,15 +311,6 @@ export function ModulePage() {
       </div>
       {error && <div role="alert" className="alert alert-error">{error}</div>}
       {notice && <div role="status" className="alert alert-success">{notice}</div>}
-      {module === 'notifications' && can('notifications', 'manage') && (
-        <form className="panel dialog-form" onSubmit={(event) => void sendTestTelegram(event)}>
-          <div className="dialog-heading"><div><p className="eyebrow">CONFIGURED CHAT ID</p><h3>Send Telegram test message</h3></div><MessageCircle size={18} /></div>
-          <label>Configured chat ID<input required maxLength={64} placeholder="123456789" value={telegramForm.to} onChange={(event) => setTelegramForm({ ...telegramForm, to: event.target.value })} /></label>
-          <label>Message<textarea required maxLength={1000} rows={3} value={telegramForm.body} onChange={(event) => setTelegramForm({ ...telegramForm, body: event.target.value })} /></label>
-          <small>The backend rejects recipients not explicitly listed in `TWILIO_TEST_RECIPIENTS`. Network errors are marked unknown to avoid accidental duplicate sends.</small>
-          <button type="submit" className="primary-button" disabled={saving}><MessageCircle size={15} /> {saving ? 'Sending…' : 'Send test message'}</button>
-        </form>
-      )}
       <section className="panel data-panel">
         <div className="table-toolbar">
           <div className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${info.title.toLowerCase()}`} aria-label={`Search ${info.title}`} /></div>
@@ -379,7 +332,6 @@ export function ModulePage() {
                   {canRecordPayment && item.status === 'approved' && <button className="table-action" disabled={saving} onClick={() => { setRecordingBooking(item); setTransactionReference(''); setPaymentVerified(false); setError('') }}>Record bank transfer</button>}
                   {canCreateMeeting && item.status === 'scheduled' && !item.data?.meetingUrl && !['creating', 'created', 'unknown'].includes(String(item.data?.meetingCreationStatus)) && <button className="table-action" disabled={saving} onClick={() => void createTestMeeting(item)}><Video size={12} /> Create meeting link</button>}
                   {canRefreshRefund && ['pending', 'unknown'].includes(item.status) && Boolean(item.data?.providerRefundId) && <button className="table-action" disabled={saving} onClick={() => void refreshRefundStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
-                  {canRefreshNotification && ['queued', 'unknown'].includes(item.status) && Boolean(item.data?.providerId) && <button className="table-action" disabled={saving} onClick={() => void refreshTelegramStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
                   {canDeleteRecords && <button className="table-action danger-action" disabled={saving} onClick={() => void deleteRecord(item)}><Trash2 size={12} /> {module === 'recordings' ? 'Delete recording' : 'Delete class'}</button>}
                 </td>}
               </tr>
@@ -413,7 +365,7 @@ export function ModulePage() {
               <p>{recordingBooking.title} · Rs. {readableValue(recordingBooking.data?.amount)}</p>
               <label>Bank transaction reference<input required minLength={3} maxLength={128} value={transactionReference} onChange={(event) => setTransactionReference(event.target.value)} /></label>
               <label className="check-label"><input type="checkbox" checked={paymentVerified} onChange={(event) => setPaymentVerified(event.target.checked)} /> I verified this transfer was received.</label>
-              <small>Recording is permanent and audited. If meeting, email, or Telegram test setup is missing, payment will still be recorded and delivery can be retried from Meeting checks.</small>
+              <small>Recording is permanent and audited. If meeting or email setup is missing, payment will still be recorded and delivery can be retried from Meeting checks.</small>
               {error && <div role="alert" className="form-error">{error}</div>}
               <div className="dialog-actions">
                 <button type="button" className="secondary-button" disabled={saving} onClick={() => setRecordingBooking(null)}>Cancel</button>

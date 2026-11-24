@@ -1,5 +1,4 @@
 import nodemailer from 'nodemailer';
-import { sendTelegramMessage, telegramChatForEmail, telegramConfigured } from '../integrations/telegram.js';
 
 function envValue(key) {
   const value = process.env[key];
@@ -29,13 +28,8 @@ export function notificationConfiguration() {
   if (!envValue('SMTP_FROM')) emailMissing.push('SMTP_FROM');
   if (testEnvironment() && !emailTestRecipients().length) emailMissing.push('BOOKING_EMAIL_TEST_RECIPIENTS');
 
-  const telegramMissing = [];
-  if (!envValue('TELEGRAM_BOT_TOKEN')) telegramMissing.push('TELEGRAM_BOT_TOKEN');
-  if (!telegramConfigured()) telegramMissing.push('TELEGRAM_CHAT_ID or TELEGRAM_CHAT_IDS');
-
   return {
     email: { configured: emailMissing.length === 0, missingKeys: emailMissing },
-    telegram: { configured: telegramMissing.length === 0, missingKeys: telegramMissing },
   };
 }
 
@@ -102,38 +96,6 @@ async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind
     console.error('Booking email delivery failed:', error.message);
     await record(pool, { recipientId: recipient.id, channel: 'email', subject, body, status: 'failed', bookingId, kind });
     return { recipientId: recipient.id, channel: 'email', status: 'failed', error: error.message };
-  }
-}
-
-async function sendTelegram(pool, recipient, { subject, body, bookingId, kind = 'booking_confirmation', receiptBuffer = null, receiptFilename = null }) {
-  if (!telegramConfigured()) {
-    await record(pool, {
-      recipientId: recipient.id, channel: 'telegram', subject, body, status: 'skipped',
-      providerId: 'skipped: Telegram is not configured.', bookingId, kind,
-    });
-    return { recipientId: recipient.id, channel: 'telegram', status: 'skipped', error: 'Telegram is not configured.' };
-  }
-  const chatId = telegramChatForEmail(recipient.email);
-  if (!chatId) {
-    await record(pool, { recipientId: recipient.id, channel: 'telegram', subject, body, status: 'failed', bookingId, kind });
-    return { recipientId: recipient.id, channel: 'telegram', status: 'failed', error: 'No Telegram chat ID is mapped to this recipient.' };
-  }
-  try {
-    const { messageId } = await sendTelegramMessage({
-      chatId,
-      text: body,
-      document: receiptBuffer,
-      filename: receiptFilename ?? 'payment-receipt.pdf',
-    });
-    await record(pool, {
-      recipientId: recipient.id, channel: 'telegram', subject, body, status: 'sent',
-      providerId: messageId || null, bookingId, kind,
-    });
-    return { recipientId: recipient.id, channel: 'telegram', status: 'sent', providerId: messageId || null };
-  } catch (error) {
-    console.error('Booking Telegram delivery failed:', error.message);
-    await record(pool, { recipientId: recipient.id, channel: 'telegram', subject, body, status: 'failed', bookingId, kind });
-    return { recipientId: recipient.id, channel: 'telegram', status: 'failed', error: error.message };
   }
 }
 
@@ -335,15 +297,7 @@ export async function sendBookingDetails(pool, recipients, context) {
           content: context.receiptBuffer,
         }]
       : [];
-    const hasReceipt = recipient.role === 'student' && Boolean(context.receiptBuffer);
     results.push(await sendEmail(pool, recipient, { ...copy, bookingId: context.bookingId, kind: context.kind ?? 'booking_confirmation', attachments }));
-    results.push(await sendTelegram(pool, recipient, {
-      ...copy,
-      bookingId: context.bookingId,
-      kind: context.kind ?? 'booking_confirmation',
-      receiptBuffer: hasReceipt ? context.receiptBuffer : null,
-      receiptFilename: context.receiptFilename,
-    }));
   }
   return results;
 }

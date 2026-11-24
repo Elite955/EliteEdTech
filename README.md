@@ -20,7 +20,7 @@ A four-app one-to-one tutoring platform: students browse approved teachers, requ
 - Security: role-specific HttpOnly cookies, TOTP MFA, AES-256-GCM field encryption, append-only audit log, permission matrix.
 - Payments: Razorpay test-mode orders, verification, webhook, full refunds.
 - Meetings: Jitsi test rooms or Google Meet spaces; existing Zoom links remain readable.
-- Notifications: Nodemailer SMTP and Twilio WhatsApp sandbox with dev/test allowlists.
+- Notifications: Nodemailer SMTP with a dev/test recipient allowlist.
 
 ## Local setup
 
@@ -86,8 +86,6 @@ Backend variables are read from the root `.env` by `backend/src/config.js`.
 | `PORTAL_ORIGIN` | Fallback portal origin for notifications |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Password reset and booking email |
 | `BOOKING_EMAIL_TEST_RECIPIENTS` | Comma-separated dev/test email allowlist |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` | WhatsApp sandbox |
-| `TWILIO_SANDBOX_MODE`, `TWILIO_TEST_RECIPIENTS` | Sandbox gating and E.164 recipient allowlist |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Razorpay test credentials |
 | `RAZORPAY_TEST_MODE` | Must be `true` for payments/refunds in dev/test |
 | `MEETING_PROVIDER` | `jitsi` or `google_meet` |
@@ -148,7 +146,7 @@ The four frontend apps are static Vite builds and each includes a `vercel.json` 
 
 Set the `VITE_*` variables listed above in each project. The API backend is a long-running Express + Socket.IO service with a PostgreSQL pool; deploy it to a Node host such as Render, Railway, or Fly.io, then set `VITE_API_URL`/`VITE_SOCKET_URL` in Vercel and the four `*_ORIGIN` variables on the API. Static Vercel projects do not host the Express/Socket.IO server.
 
-Do not enable production payment or notification test flags. Razorpay refunds, Jitsi links, Google Meet test spaces, and Twilio sandbox messages are restricted to development/test configuration.
+Do not enable production payment or notification test flags. Razorpay refunds, Jitsi links, and Google Meet test spaces are restricted to development/test configuration.
 
 ## Checks
 

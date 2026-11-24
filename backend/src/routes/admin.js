@@ -7,7 +7,6 @@ import { writeAudit } from '../security/audit.js';
 import { hasPermission, requireAdmin, requirePermission } from '../security/authMiddleware.js';
 import { sendPasswordResetEmail } from '../security/passwordReset.js';
 import { createFullRefund, getRefundStatus, isRazorpayTestConfigured } from '../integrations/razorpay.js';
-import { sendTelegramMessage, telegramAllowedChatIds, telegramConfigured } from '../integrations/telegram.js';
 import { ProviderError } from '../integrations/providerError.js';
 import { createSelectedMeeting, meetingProviderConfigurationStatus, selectedMeetingProviderId } from '../meetings/provider.js';
 import { createPdfReport, createXlsxReport, getAdminSummaryRows } from '../reports/adminSummaryReport.js';
@@ -440,64 +439,6 @@ adminRouter.get('/refunds/:id/status', requireAdmin, requirePermission('refunds'
   } catch (error) { return next(error); }
 });
 
-adminRouter.post('/notifications/test-telegram', requireAdmin, requirePermission('notifications', 'manage'), providerActionLimiter, async (req, res, next) => {
-  const input = z.object({
-    requestId: z.string().uuid(),
-    chatId: z.string().trim().min(1).max(64),
-    body: z.string().trim().min(1).max(1000),
-  }).safeParse(req.body);
-  if (!input.success) return validationError(res, input.error);
-  if (!telegramConfigured()) {
-    return res.status(503).json({ error: 'Telegram sending is disabled. Configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.' });
-  }
-  if (!telegramAllowedChatIds().includes(input.data.chatId)) {
-    return res.status(403).json({ error: 'That chat ID is not configured on this server.' });
-  }
-  try {
-    const inserted = await pool.query(
-      `INSERT INTO notifications (request_id, channel, subject, body, status)
-       VALUES ($1, 'telegram', 'Admin Telegram test', $2, 'queued')
-       ON CONFLICT (request_id) WHERE request_id IS NOT NULL DO NOTHING
-       RETURNING id`,
-      [input.data.requestId, input.data.body],
-    );
-    if (!inserted.rowCount) {
-      const existing = await pool.query(
-        `SELECT id, status FROM notifications WHERE request_id = $1`,
-        [input.data.requestId],
-      );
-      return res.json({ id: existing.rows[0].id, status: existing.rows[0].status, duplicateRequest: true });
-    }
-    const notificationId = inserted.rows[0].id;
-    try {
-      const { messageId } = await sendTelegramMessage({ chatId: input.data.chatId, text: input.data.body });
-      await pool.query(
-        `UPDATE notifications SET provider_id = $2, status = 'sent' WHERE id = $1`,
-        [notificationId, messageId || null],
-      );
-      await writeAudit(req, { event: 'telegram_test_message_requested', module: 'notifications', targetId: notificationId, details: { status: 'sent' } });
-      return res.status(202).json({ id: notificationId, status: 'sent' });
-    } catch (error) {
-      await pool.query(`UPDATE notifications SET status = 'failed' WHERE id = $1`, [notificationId]);
-      await writeAudit(req, { event: 'telegram_test_message_requested', module: 'notifications', targetId: notificationId, details: { status: 'failed', error: error.message } });
-      return res.status(502).json({ error: error.message, status: 'failed' });
-    }
-  } catch (error) { return next(error); }
-});
-
-adminRouter.get('/notifications/:id/telegram-status', requireAdmin, requirePermission('notifications', 'manage'), async (req, res, next) => {
-  const notificationId = z.string().uuid().safeParse(req.params.id);
-  if (!notificationId.success) return validationError(res, notificationId.error);
-  try {
-    const result = await pool.query(
-      `SELECT id, status FROM notifications WHERE id = $1 AND channel = 'telegram'`,
-      [notificationId.data],
-    );
-    if (!result.rowCount) return res.status(404).json({ error: 'Telegram notification not found.' });
-    return res.json({ status: result.rows[0].status, unchanged: true });
-  } catch (error) { return next(error); }
-});
-
 adminRouter.post('/live-classes/:id/test-meeting', requireAdmin, requirePermission('live_classes', 'manage'), providerActionLimiter, async (req, res, next) => {
   const sessionId = z.string().uuid().safeParse(req.params.id);
   if (!sessionId.success) return validationError(res, sessionId.error);
@@ -724,8 +665,7 @@ adminRouter.post('/live-classes/:id/send-join-details', requireAdmin, requirePer
     if (result.status === 'not_configured') {
       const missingKeys = [
         ...(result.configuration?.email?.missingKeys ?? []),
-        ...(result.configuration?.telegram?.missingKeys ?? []),
-      ];
+              ];
       return res.status(503).json({ error: result.error, configuration: result.configuration, missingKeys });
     }
     if (result.status === 'meeting_missing') {
@@ -1312,7 +1252,6 @@ async function moduleRows(module) {
           { id: 'payments', title: 'Razorpay test mode', status: isRazorpayTestConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Razorpay', testMode: isRazorpayTestConfigured(), capabilities: 'Full test-mode refunds only; live keys and production requests are disabled.' } },
           { id: 'meeting_provider', title: meetingProvider.title, status: meetingProvider.configured ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: meetingProvider.id, testMode: true, missingKeys: meetingProvider.missingKeys, capabilities: meetingProvider.id === 'jitsi' ? 'Generates unique room links on public meet.jit.si; anyone with the link may join.' : 'Creates meeting links through the selected provider in development/test mode.' } },
           { id: 'email', title: 'Nodemailer SMTP', status: process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD ? 'credentials_present' : 'missing_credentials', created_at: new Date().toISOString(), data: { provider: 'Nodemailer', credentialsPresent: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD), capabilities: 'Password reset email is implemented; bulk notifications are not.' } },
-          { id: 'telegram', title: 'Telegram Bot API', status: telegramConfigured() ? 'test_mode_ready' : 'disabled', created_at: new Date().toISOString(), data: { provider: 'Telegram Bot API', testMode: true, capabilities: 'Sends payment receipts and class links as PDF documents to configured chat IDs; no per-message fee.' } },
         ];
       }
     case 'configuration':

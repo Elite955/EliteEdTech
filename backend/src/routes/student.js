@@ -432,7 +432,7 @@ async function notifyPaidBooking(booking) {
 }
 
 async function finalizePaidBooking(result) {
-  // Create the join link at payment time so the confirmation email/Telegram
+  // Create the join link at payment time so the confirmation email
   // already contains it, instead of waiting for the class to start.
   const meeting = await ensureSessionMeeting(result.session.id, { allowBeforeStart: true });
   const delivery = await notifyPaidBooking(result.booking);

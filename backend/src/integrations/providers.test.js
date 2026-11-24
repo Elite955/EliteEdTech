@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFullRefund, getRefundStatus, isRazorpayTestConfigured } from './razorpay.js';
-import { getWhatsAppMessageStatus, isTwilioSandboxConfigured, sendWhatsAppTestMessage } from './twilio.js';
 import { createTestGoogleMeetSpace, isGoogleMeetTestConfigured } from './googleMeet.js';
 
 const razorpayEnv = {
@@ -9,15 +8,6 @@ const razorpayEnv = {
   RAZORPAY_TEST_MODE: 'true',
   RAZORPAY_KEY_ID: 'rzp_test_example',
   RAZORPAY_KEY_SECRET: 'test-secret',
-};
-
-const twilioEnv = {
-  NODE_ENV: 'development',
-  TWILIO_SANDBOX_MODE: 'true',
-  TWILIO_ACCOUNT_SID: 'AC-test',
-  TWILIO_AUTH_TOKEN: 'test-secret',
-  TWILIO_WHATSAPP_FROM: 'whatsapp:+14155238886',
-  TWILIO_TEST_RECIPIENTS: '+15551234567',
 };
 
 const googleMeetEnv = {
@@ -66,46 +56,6 @@ test('Razorpay refunds require development test credentials and use paise', asyn
     },
   });
   assert.equal(refundStatus.status, 'processed');
-});
-
-test('Twilio sends only to configured sandbox recipients', async () => {
-  let fetchCount = 0;
-  assert.equal(isTwilioSandboxConfigured({ ...twilioEnv, NODE_ENV: 'production' }), false);
-  await assert.rejects(
-    sendWhatsAppTestMessage({
-      to: '+15550000000',
-      body: 'test',
-      env: twilioEnv,
-      fetchImpl: async () => { fetchCount += 1; },
-    }),
-    /allowlist/,
-  );
-  assert.equal(fetchCount, 0);
-
-  let request;
-  const result = await sendWhatsAppTestMessage({
-    to: '+15551234567',
-    body: 'sandbox message',
-    env: twilioEnv,
-    fetchImpl: async (url, options) => {
-      request = { url, options };
-      return { ok: true, status: 201, json: async () => ({ sid: 'SM-test', status: 'queued' }) };
-    },
-  });
-  assert.equal(result.id, 'SM-test');
-  assert.match(request.url, /api\.twilio\.com/);
-  assert.equal(new URLSearchParams(request.options.body).get('To'), 'whatsapp:+15551234567');
-  assert.equal(new URLSearchParams(request.options.body).get('From'), 'whatsapp:+14155238886');
-
-  const messageStatus = await getWhatsAppMessageStatus({
-    messageId: 'SM-test',
-    env: twilioEnv,
-    fetchImpl: async (url) => {
-      assert.match(url, /\/Messages\/SM-test\.json$/);
-      return { ok: true, status: 200, json: async () => ({ sid: 'SM-test', status: 'delivered' }) };
-    },
-  });
-  assert.equal(messageStatus.status, 'delivered');
 });
 
 test('Google Meet creation requires development test mode and OAuth credentials', async () => {

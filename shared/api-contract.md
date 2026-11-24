@@ -89,7 +89,7 @@ All require an admin session and the listed permission where applicable.
 | Security | `GET /security/sessions/active`, `POST /security/sessions/:id/revoke` |
 | Roles | `GET /roles`, `GET /permissions`, `POST /roles`, `PUT /roles/:id/permissions` |
 | Finance | `POST /transactions/:id/refund`, `GET /refunds/:id/status`, `POST /bookings/:id/record-bank-transfer` |
-| Notifications | `POST /notifications/test-whatsapp`, `GET /notifications/:id/test-status` |
+| Notifications | Email delivery records in the notification centre |
 | Meetings | `GET /meeting-checks`, `POST /live-classes/:id/create-meeting`, `POST /live-classes/:id/send-join-details`, `POST /live-classes/:id/test-meeting` |
 | Modules | `GET/POST /modules/:module`, `PATCH /modules/:module/:id` |
 | Search | `GET /search?q=` |
@@ -124,4 +124,4 @@ Only teachers may draw or clear; students receive live updates. Board state is i
 - Razorpay refunds are full refunds only, INR only, with `rzp_test_` keys and `RAZORPAY_TEST_MODE=true`.
 - Jitsi test mode works only in development/test and creates public room links.
 - Google Meet test mode also requires OAuth credentials and development/test mode.
-- Email and WhatsApp delivery are restricted by dev/test allowlists.
+- Email delivery is restricted by the dev/test allowlist.
