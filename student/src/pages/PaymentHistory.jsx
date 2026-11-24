@@ -1,10 +1,33 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { api, apiUrl } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 
 export default function PaymentHistory() {
   const [payments, setPayments] = useState(null)
   const [err, setErr] = useState('')
+  const [downloading, setDownloading] = useState('')
+
+  async function downloadReceipt(payment) {
+    setDownloading(payment.id)
+    setErr('')
+    try {
+      const res = await fetch(apiUrl(`/payments/${payment.id}/receipt`), { credentials: 'include' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || `Receipt download failed (${res.status})`)
+      }
+      const url = URL.createObjectURL(await res.blob())
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `ELITE-receipt-${payment.id.slice(0, 8)}.pdf`
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 0)
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setDownloading('')
+    }
+  }
 
   useEffect(() => {
     api
@@ -34,6 +57,7 @@ export default function PaymentHistory() {
               <th>Status</th>
               <th>Payment ID</th>
               <th>Order ID</th>
+              <th>Receipt</th>
             </tr>
           </thead>
           <tbody>
@@ -47,6 +71,16 @@ export default function PaymentHistory() {
                 </td>
                 <td style={{ fontSize: 12 }}>{p.provider_transaction_id || '—'}</td>
                 <td style={{ fontSize: 12 }}>{p.provider_order_id || '—'}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={downloading === p.id}
+                    onClick={() => downloadReceipt(p)}
+                  >
+                    {downloading === p.id ? 'Preparing…' : 'Download PDF'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS payments (
   student_id UUID REFERENCES users(id),
   provider TEXT NOT NULL DEFAULT 'razorpay',
   provider_transaction_id TEXT,
+  provider_order_id TEXT,
   recorded_by UUID REFERENCES users(id),
   amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'succeeded', 'failed', 'refunded')),
@@ -158,6 +159,7 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS recorded_by UUID REFERENCES users(id);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS provider_order_id TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS payments_bank_transfer_reference_idx
   ON payments(provider_transaction_id)
@@ -225,7 +227,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   channel TEXT NOT NULL CHECK (channel IN ('email', 'whatsapp', 'in_app')),
   subject TEXT NOT NULL,
   body TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sent', 'failed')),
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sent', 'failed', 'skipped')),
   provider_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -233,6 +235,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS request_id UUID;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'booking_confirmation';
+
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_kind_check;
 ALTER TABLE notifications
   ADD CONSTRAINT notifications_kind_check
@@ -240,7 +243,7 @@ ALTER TABLE notifications
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_status_check;
 ALTER TABLE notifications
   ADD CONSTRAINT notifications_status_check
-  CHECK (status IN ('queued', 'sent', 'failed', 'unknown'));
+  CHECK (status IN ('queued', 'sent', 'failed', 'unknown', 'skipped'));
 
 CREATE UNIQUE INDEX IF NOT EXISTS notifications_request_id_idx
   ON notifications(request_id) WHERE request_id IS NOT NULL;

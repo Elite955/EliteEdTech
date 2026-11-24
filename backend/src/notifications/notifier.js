@@ -101,8 +101,12 @@ async function record(pool, { recipientId, channel, subject, body, status, provi
   }
 }
 
-async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind = 'booking_confirmation' }) {
+async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind = 'booking_confirmation', attachments = [] }) {
   if (!smtpConfigured()) {
+    await record(pool, {
+      recipientId: recipient.id, channel: 'email', subject, body, status: 'skipped',
+      providerId: 'skipped: SMTP is not configured.', bookingId, kind,
+    });
     return { recipientId: recipient.id, channel: 'email', status: 'skipped', error: 'SMTP is not configured.' };
   }
   if (!recipient.email) {
@@ -110,6 +114,10 @@ async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind
     return { recipientId: recipient.id, channel: 'email', status: 'failed', error: 'Recipient has no email address.' };
   }
   if (testEnvironment() && !emailTestRecipients().includes(recipient.email.trim().toLowerCase())) {
+    await record(pool, {
+      recipientId: recipient.id, channel: 'email', subject, body, status: 'skipped',
+      providerId: 'skipped: recipient is not on the email test allowlist.', bookingId, kind,
+    });
     return { recipientId: recipient.id, channel: 'email', status: 'skipped', error: 'Recipient is not on the email test allowlist.' };
   }
   const port = Number(envValue('SMTP_PORT') || 587);
@@ -129,6 +137,7 @@ async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind
       subject,
       text: body,
       html,
+      attachments,
     });
     await record(pool, {
       recipientId: recipient.id, channel: 'email', subject, body, status: 'sent',
@@ -144,6 +153,10 @@ async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind
 
 async function sendWhatsApp(pool, recipient, { subject, body, bookingId, kind = 'booking_confirmation' }) {
   if (!twilioConfigured()) {
+    await record(pool, {
+      recipientId: recipient.id, channel: 'whatsapp', subject, body, status: 'skipped',
+      providerId: 'skipped: WhatsApp is not configured.', bookingId, kind,
+    });
     return { recipientId: recipient.id, channel: 'whatsapp', status: 'skipped', error: 'WhatsApp is not configured.' };
   }
   const phone = normalizeWhatsAppNumber(recipient.phone);
@@ -157,6 +170,10 @@ async function sendWhatsApp(pool, recipient, { subject, body, bookingId, kind = 
     };
   }
   if (testEnvironment() && !isAllowedTwilioTestRecipient(phone)) {
+    await record(pool, {
+      recipientId: recipient.id, channel: 'whatsapp', subject, body, status: 'skipped',
+      providerId: 'skipped: recipient is not on the WhatsApp test allowlist.', bookingId, kind,
+    });
     return { recipientId: recipient.id, channel: 'whatsapp', status: 'skipped', error: 'Recipient is not on the WhatsApp test allowlist.' };
   }
   try {
@@ -377,7 +394,14 @@ export async function sendBookingDetails(pool, recipients, context) {
   const results = [];
   for (const recipient of recipients) {
     const copy = bookingCopy(recipient, context);
-    results.push(await sendEmail(pool, recipient, { ...copy, bookingId: context.bookingId, kind: context.kind ?? 'booking_confirmation' }));
+    const attachments = recipient.role === 'student' && context.receiptBuffer
+      ? [{
+          filename: context.receiptFilename ?? 'payment-receipt.pdf',
+          contentType: 'application/pdf',
+          content: context.receiptBuffer,
+        }]
+      : [];
+    results.push(await sendEmail(pool, recipient, { ...copy, bookingId: context.bookingId, kind: context.kind ?? 'booking_confirmation', attachments }));
     results.push(await sendWhatsApp(pool, recipient, { ...copy, bookingId: context.bookingId, kind: context.kind ?? 'booking_confirmation' }));
   }
   return results;

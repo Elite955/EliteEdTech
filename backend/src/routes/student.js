@@ -7,6 +7,7 @@ import { writeAudit } from '../security/audit.js';
 import { createOrder, publicKeyId, razorpayConfigured, verifyPaymentSignature, verifyWebhookSignature } from '../payments/razorpay.js';
 import { ensureSessionMeeting } from '../meetings/service.js';
 import { selectedMeetingProviderId } from '../meetings/provider.js';
+import { buildPaymentReceipt } from '../payments/receipt.js';
 import { sendBookingDetails } from '../notifications/notifier.js';
 
 export const studentRouter = Router();
@@ -330,8 +331,8 @@ studentRouter.post('/payments/order', requireAuthenticatedUser, requireStudent, 
     });
 
     await pool.query(
-      `INSERT INTO payments (booking_id, student_id, provider, provider_transaction_id, amount, status)
-       VALUES ($1, $2, 'razorpay', $3, $4, 'pending')`,
+      `INSERT INTO payments (booking_id, student_id, provider, provider_transaction_id, provider_order_id, amount, status)
+       VALUES ($1, $2, 'razorpay', $3, $3, $4, 'pending')`,
       [booking.id, req.auth.id, order.id, booking.amount],
     );
     await writeAudit(req, { actorId: req.auth.id, event: 'payment_order_created', module: 'transactions', targetId: order.id });
@@ -356,7 +357,8 @@ const verifySchema = z.object({
 async function markBookingPaid(req, { bookingId, orderId, paymentId }) {
   await pool.query(
     `UPDATE payments SET status = 'succeeded', provider_transaction_id = $3, updated_at = now()
-     WHERE booking_id = $1 AND provider_transaction_id = $2 AND status = 'pending'`,
+     WHERE booking_id = $1 AND COALESCE(provider_order_id, provider_transaction_id) = $2
+       AND status = 'pending'`,
     [bookingId, orderId, paymentId],
   );
   const { rows } = await pool.query(
@@ -384,10 +386,29 @@ async function notifyPaidBooking(booking) {
   );
   const student = personRows.find((row) => row.role === 'student');
   const teacher = personRows.find((row) => row.role === 'teacher');
-  const { rows: sessionRows } = await pool.query(
-    `SELECT meeting_url FROM class_sessions WHERE booking_id = $1`,
-    [booking.id],
-  );
+  const [{ rows: sessionRows }, { rows: paymentRows }] = await Promise.all([
+    pool.query(`SELECT meeting_url FROM class_sessions WHERE booking_id = $1`, [booking.id]),
+    pool.query(
+      `SELECT id, provider, provider_transaction_id, amount, status, created_at
+       FROM payments WHERE booking_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [booking.id],
+    ),
+  ]);
+  const meetingUrl = sessionRows[0]?.meeting_url ?? null;
+  let receiptBuffer = null;
+  if (paymentRows[0]) {
+    try {
+      receiptBuffer = await buildPaymentReceipt({
+        payment: paymentRows[0],
+        booking,
+        student,
+        teacher,
+        meetingUrl,
+      });
+    } catch (error) {
+      console.error('Receipt generation failed:', error.message);
+    }
+  }
   const date = new Date(booking.starts_at).toLocaleDateString('en-IN', { timeZone: IST_ZONE });
   const startTime = new Date(booking.starts_at).toLocaleTimeString('en-IN', {
     timeZone: IST_ZONE, hour: '2-digit', minute: '2-digit', hour12: false,
@@ -403,8 +424,10 @@ async function notifyPaidBooking(booking) {
     startTime,
     endTime,
     amount: Number(booking.amount),
-    meetingUrl: sessionRows[0]?.meeting_url ?? null,
+    meetingUrl,
     directMeetingLinkForStudent: true,
+    receiptBuffer,
+    receiptFilename: `ELITE-receipt-${String(paymentRows[0]?.id ?? booking.id).slice(0, 8)}.pdf`,
   });
 }
 
@@ -435,7 +458,8 @@ studentRouter.post('/payments/verify', requireAuthenticatedUser, requireStudent,
 
     const { rows } = await pool.query(
       `SELECT booking_id FROM payments
-       WHERE provider_transaction_id = $1 AND student_id = $2 AND status = 'pending'`,
+       WHERE COALESCE(provider_order_id, provider_transaction_id) = $1
+         AND student_id = $2 AND status = 'pending'`,
       [razorpay_order_id, req.auth.id],
     );
     const payment = rows[0];
@@ -443,11 +467,26 @@ studentRouter.post('/payments/verify', requireAuthenticatedUser, requireStudent,
       return res.status(400).json({ error: 'No pending payment matches this checkout session.' });
     }
 
-    const result = await completePaidBooking(req, {
-      bookingId: payment.booking_id, orderId: razorpay_order_id, paymentId: razorpay_payment_id,
-    });
-    if (!result) {
-      return res.json({ status: 'paid' });
+    // The payment is already confirmed by the signature. A meeting-provider or
+    // notification failure must never make the browser report a failed payment
+    // and trigger a second checkout.
+    try {
+      await completePaidBooking(req, {
+        bookingId: payment.booking_id, orderId: razorpay_order_id, paymentId: razorpay_payment_id,
+      });
+    } catch (error) {
+      console.error('Post-payment processing failed:', error.message);
+      await writeAudit(req, {
+        actorId: req.auth.id,
+        event: 'payment_finalization_failed',
+        module: 'transactions',
+        targetId: razorpay_payment_id,
+        details: { error: error.message },
+      });
+      return res.json({
+        status: 'paid',
+        warning: 'Payment confirmed. If the join link is missing, open the portal Sessions page in a few minutes.',
+      });
     }
 
     await writeAudit(req, { actorId: req.auth.id, event: 'payment_succeeded', module: 'transactions', targetId: razorpay_payment_id });
@@ -468,7 +507,8 @@ studentRouter.post('/payments/webhook', express.raw({ type: 'application/json', 
     const entity = event?.payload?.payment?.entity;
     if (event?.event === 'payment.captured' && entity) {
       const { rows } = await pool.query(
-        `SELECT booking_id FROM payments WHERE provider_transaction_id = $1 AND status = 'pending'`,
+        `SELECT booking_id FROM payments
+         WHERE COALESCE(provider_order_id, provider_transaction_id) = $1 AND status = 'pending'`,
         [entity.order_id],
       );
       if (rows.length) {
@@ -491,13 +531,50 @@ studentRouter.post('/payments/webhook', express.raw({ type: 'application/json', 
 studentRouter.get('/payments/mine', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, booking_id, provider, provider_transaction_id, amount, status, created_at
+      `SELECT id, booking_id, provider, provider_transaction_id, provider_order_id, amount, status, created_at
        FROM payments WHERE student_id = $1 ORDER BY created_at DESC`,
       [req.auth.id],
     );
     return res.json({
       payments: rows.map((row) => ({ ...row, amount: Number(row.amount) })),
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+studentRouter.get('/payments/:id/receipt', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
+  try {
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Receipt not found.' });
+    }
+    const { rows } = await pool.query(
+      `SELECT p.id, p.provider, p.provider_transaction_id, p.amount, p.status, p.created_at,
+              b.id AS booking_id, b.starts_at, b.ends_at,
+              s.id AS student_id, s.name AS student_name, s.email AS student_email,
+              t.name AS teacher_name,
+              cs.meeting_url
+       FROM payments p
+       JOIN bookings b ON b.id = p.booking_id
+       JOIN users s ON s.id = b.student_id
+       JOIN users t ON t.id = b.teacher_id
+       LEFT JOIN class_sessions cs ON cs.booking_id = b.id
+       WHERE p.id = $1 AND b.student_id = $2`,
+      [req.params.id, req.auth.id],
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Receipt not found.' });
+
+    const pdf = await buildPaymentReceipt({
+      payment: row,
+      booking: row,
+      student: { id: row.student_id, name: row.student_name, email: row.student_email },
+      teacher: { name: row.teacher_name },
+      meetingUrl: row.meeting_url,
+    });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="ELITE-receipt-${req.params.id.slice(0, 8)}.pdf"`);
+    return res.send(pdf);
   } catch (error) {
     return next(error);
   }
