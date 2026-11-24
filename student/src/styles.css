@@ -3411,3 +3411,55 @@ a.btn:hover {
 @media (prefers-reduced-motion: reduce) {
   .elite-loader-logo { animation: none; }
 }
+
+/* ---------- Booking date quick-pick ---------- */
+.date-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.date-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.date-chip:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.date-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.date-chip strong {
+  font-size: 18px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-chip span {
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}

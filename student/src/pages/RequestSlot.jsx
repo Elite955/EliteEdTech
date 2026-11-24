@@ -2,8 +2,13 @@
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { playUiSound } from '../lib/sound'
-
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+import {
+  WEEKDAYS_SHORT,
+  formatFullDate,
+  fromDateInput,
+  toDateInput,
+  weekdayIndex,
+} from '../lib/dates'
 
 function toMinutes(t) {
   const [h, m] = String(t).split(':').map(Number)
@@ -12,11 +17,6 @@ function toMinutes(t) {
 
 function fmt(mins) {
   return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
-}
-
-function dayIndex(day) {
-  if (typeof day === 'number') return day
-  return DAYS.indexOf(String(day).slice(0, 3))
 }
 
 export default function RequestSlot() {
@@ -39,7 +39,7 @@ export default function RequestSlot() {
           setTeacher(t)
           if (firstLoad) {
             firstLoad = false
-            const availableDays = new Set((t.availability || []).map((a) => dayIndex(a.day)))
+            const availableDays = new Set((t.availability || []).map((a) => weekdayIndex(a.day)))
             const now = new Date()
             for (let i = 0; i < 7; i += 1) {
               const probe = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i)
@@ -58,11 +58,11 @@ export default function RequestSlot() {
   }, [teacherId])
 
   const weekday = useMemo(
-    () => (date ? new Date(`${date}T00:00:00`).getDay() : -1),
+    () => (date ? (fromDateInput(date)?.getDay() ?? -1) : -1),
     [date]
   )
   const dayWindows = useMemo(
-    () => (teacher?.availability || []).filter((a) => dayIndex(a.day) === weekday),
+    () => (teacher?.availability || []).filter((a) => weekdayIndex(a.day) === weekday),
     [teacher, weekday]
   )
   const starts = useMemo(() => {
@@ -74,6 +74,19 @@ export default function RequestSlot() {
     }
     return out
   }, [dayWindows])
+
+  const availableDates = useMemo(() => {
+    if (!teacher?.availability?.length) return []
+    const days = new Set(teacher.availability.map((a) => weekdayIndex(a.day)))
+    const today = new Date()
+    const out = []
+    for (let offset = 0; offset < 14; offset += 1) {
+      const probe = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset)
+      if (!days.has(probe.getDay())) continue
+      out.push({ value: toDateInput(probe), date: probe })
+    }
+    return out
+  }, [teacher])
 
   const chosenWindow = starts.find((s) => s.value === start)?.window
   const durations = useMemo(() => {
@@ -148,7 +161,9 @@ export default function RequestSlot() {
 
       <div className="card" style={{ maxWidth: 620 }}>
         <div className="field">
-          <label htmlFor="date">Class date</label>
+          <label htmlFor="date">
+            Class date{date ? ` — ${formatFullDate(fromDateInput(date))}` : ''}
+          </label>
           <input
             id="date"
             type="date"
@@ -163,6 +178,32 @@ export default function RequestSlot() {
           />
         </div>
 
+        {availableDates.length > 0 && (
+          <div className="field">
+            <span className="field-label">Quick pick the next available date</span>
+            <div className="date-chips">
+              {availableDates.map((option) => (
+                <button
+                  type="button"
+                  key={option.value}
+                  className={`date-chip${date === option.value ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setDate(option.value)
+                    setStart('')
+                    setDuration(0)
+                  }}
+                >
+                  <strong>{option.date.getDate()}</strong>
+                  <span>
+                    {WEEKDAYS_SHORT[option.date.getDay()]}{' '}
+                    {new Intl.DateTimeFormat('en-IN', { month: 'short' }).format(option.date)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {date && dayWindows.length === 0 && (
           <p className="muted">The teacher has no availability on this weekday. Try another date.</p>
         )}
@@ -170,7 +211,7 @@ export default function RequestSlot() {
         {date && starts.length > 0 && (
           <>
             <div className="field">
-              <label htmlFor="start">Start time ({DAYS[weekday]})</label>
+              <label htmlFor="start">Start time ({WEEKDAYS_SHORT[weekday]}{date ? `, ${fromDateInput(date)?.getDate()} ${new Intl.DateTimeFormat("en-IN", { month: "short" }).format(fromDateInput(date))}` : ""})</label>
               <select
                 id="start"
                 required
@@ -210,7 +251,7 @@ export default function RequestSlot() {
 
         {slot && (
           <p className="muted" style={{ marginBottom: 10 }}>
-            Selected: {DAYS[weekday]} {slot.start}–{slot.end} ({hours} hour{hours === 1 ? '' : 's'}) —
+            Selected: {WEEKDAYS_SHORT[weekday]} {slot.start}–{slot.end} ({hours} hour{hours === 1 ? '' : 's'}) —
             estimated ₹{((hours * (teacher?.hourly_rate || 0)) * 100 / 100).toFixed(2)}
           </p>
         )}

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { formatDayMonth, nextDateForWeekday } from '../lib/dates'
 
 function initials(name = '') {
   return name
@@ -43,7 +44,7 @@ export default function TeacherCard({ teacher }) {
           {preview.length ? (
             preview.map((slot, index) => (
               <span key={index} className="chip">
-                {slot.day} · {slot.start}–{slot.end}
+                {formatDayMonth(nextDateForWeekday(slot.day))} · {slot.start}–{slot.end}
               </span>
             ))
           ) : (
