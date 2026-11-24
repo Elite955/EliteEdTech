@@ -14,6 +14,17 @@ import { clearPortalCookies, setPortalCookie } from '../security/portals.js';
 
 export const authRouter = Router();
 
+// Mints a short-lived token for the Socket.IO handshake. The browser cannot send
+// the httpOnly session cookie cross-site, so sockets authenticate with this.
+authRouter.get('/socket-token', requireAuthenticatedUser, (req, res) => {
+  const token = jwt.sign(
+    { sub: req.auth.id, sid: req.auth.session_id, type: 'socket' },
+    process.env.JWT_SECRET,
+    { expiresIn: '2m' },
+  );
+  res.json({ token, portal: req.auth.session_portal });
+});
+
 const loginSchema = z.object({
   email: z.string().email().max(254),
   password: z.string().min(1).max(256),

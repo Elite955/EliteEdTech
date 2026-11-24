@@ -151,6 +151,10 @@ Set these, then **redeploy** (Vite bakes them in at build time):
 - **home**: `VITE_STUDENT_PORTAL_URL`, `VITE_TEACHER_PORTAL_URL`
 
 Do **not** set `VITE_API_URL` — the apps use relative `/api` on purpose.
+You **must** set `VITE_SOCKET_URL=https://edtech-api-bvir.onrender.com` on
+`student`, `admin` and `teacher`: WebSocket upgrades are not proxied by a
+Vercel rewrite, so the socket connects to Render directly and authenticates with
+a short-lived `/api/auth/socket-token` token.
 
 Then go back to Render and set the four `*_ORIGIN` variables to the Vercel
 production domains, and redeploy the API.

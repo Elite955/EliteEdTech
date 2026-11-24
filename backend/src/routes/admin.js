@@ -1493,3 +1493,46 @@ adminRouter.patch('/modules/:module/:id', requireAdmin, async (req, res, next) =
     return res.json({ message: 'Record updated.' });
   } catch (error) { return next(error); }
 });
+
+// Destructive cleanup for live-class records and stored recording links.
+// Kept separate from PATCH so the action is explicit and always audited.
+adminRouter.delete('/modules/:module/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const { module } = req.params;
+    if (!['live_classes', 'recordings'].includes(module)) {
+      return res.status(404).json({ error: 'This record type cannot be deleted.' });
+    }
+    if (!(await hasPermission(req.auth, module, 'delete'))) {
+      return res.status(403).json({ error: 'You do not have permission to delete records in this module.' });
+    }
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Record not found.' });
+    }
+
+    if (module === 'recordings') {
+      const { rows } = await pool.query(
+        `UPDATE class_sessions
+         SET recording_url = NULL, recording_consent = false
+         WHERE id = $1 AND recording_url IS NOT NULL
+         RETURNING id`,
+        [req.params.id],
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Recording not found.' });
+      await writeAudit(req, { event: 'recording_deleted', module, targetId: req.params.id });
+      return res.json({ message: 'Recording removed.' });
+    }
+
+    const { rows } = await pool.query(
+      `DELETE FROM class_sessions WHERE id = $1 RETURNING booking_id`,
+      [req.params.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Class session not found.' });
+    await writeAudit(req, {
+      event: 'class_session_deleted',
+      module,
+      targetId: req.params.id,
+      details: { bookingId: rows[0].booking_id },
+    });
+    return res.json({ message: 'Class session deleted.' });
+  } catch (error) { return next(error); }
+});

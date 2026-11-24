@@ -79,6 +79,11 @@ io.use(async (socket, next) => {
     let portal = hintedPortal;
     let token = hintedPortal ? getCookie(cookieHeader, PORTAL_COOKIES[hintedPortal]) : null;
 
+    // Browsers refuse to send the SameSite=Strict session cookie on a
+    // cross-site socket handshake (the API lives on a different host from the
+    // portals), so clients can present a short-lived token instead.
+    if (socket.handshake.auth?.token) token = String(socket.handshake.auth.token);
+
     if (!hintedPortal) {
       for (const candidate of ['admin', 'teacher', 'student']) {
         const candidateToken = getCookie(cookieHeader, PORTAL_COOKIES[candidate]);
@@ -93,7 +98,7 @@ io.use(async (socket, next) => {
 
     if (!token) return next(new Error('Authentication required.'));
     const claims = jwt.verify(token, process.env.JWT_SECRET);
-    if (claims.type !== 'session') return next(new Error('Authentication required.'));
+    if (claims.type !== 'session' && claims.type !== 'socket') return next(new Error('Authentication required.'));
 
     if (portal === 'admin' || portal === null) {
       const adminResult = await pool.query(

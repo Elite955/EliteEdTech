@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
-import { Download, FileText, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, Search, Video, X } from 'lucide-react'
+import { Download, FileText, MessageCircle, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Video, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import { useSuccessBurst } from '../components/useSuccessBurst'
 import { api, apiUrl, getErrorMessage } from '../lib/api'
@@ -77,6 +77,7 @@ export function ModulePage() {
   const canRefreshRefund = module === 'refunds' && can('refunds', 'manage')
   const canRefreshNotification = module === 'notifications' && can('notifications', 'manage')
   const canExportReport = module === 'reports' && can('reports', 'export')
+  const canDeleteRecords = ['live_classes', 'recordings'].includes(module) && can(module, 'delete')
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
     return query ? items.filter((item) => `${item.title} ${item.status} ${JSON.stringify(item.data ?? {})}`.toLowerCase().includes(query)) : items
@@ -298,6 +299,23 @@ export function ModulePage() {
     } finally { setSaving(false) }
   }
 
+  async function deleteRecord(item: ModuleRecord) {
+    const subject = module === 'recordings' ? `recording for "${item.title}"` : `class session "${item.title}"`
+    if (!window.confirm(`Delete the ${subject} permanently? This action will be audited.`)) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      await api(`/admin/modules/${module}/${item.id}`, { method: 'DELETE' })
+      setNotice(module === 'recordings' ? 'Recording removed and administrative action logged.' : 'Class session deleted and administrative action logged.')
+      celebrate(module === 'recordings' ? 'Recording removed' : 'Class deleted')
+      await load()
+    } catch (requestError) {
+      playUiSound('error')
+      setError(getErrorMessage(requestError))
+    } finally { setSaving(false) }
+  }
+
   async function createTestMeeting(item: ModuleRecord) {
     if (!window.confirm(`Create a meeting link for "${item.title}" using the configured provider?`)) return
     setSaving(true)
@@ -316,7 +334,7 @@ export function ModulePage() {
 
   if (!info) return <div className="alert alert-error">This admin module is not recognized.</div>
   const canCreate = info.editable && editableModules.has(module) && can(module, 'create')
-  const hasRowActions = canRefund || canRecordPayment || canCreateMeeting || canRefreshRefund || canRefreshNotification
+  const hasRowActions = canRefund || canRecordPayment || canCreateMeeting || canRefreshRefund || canRefreshNotification || canDeleteRecords
 
   return (
     <div className="module-page">
@@ -362,6 +380,7 @@ export function ModulePage() {
                   {canCreateMeeting && item.status === 'scheduled' && !item.data?.meetingUrl && !['creating', 'created', 'unknown'].includes(String(item.data?.meetingCreationStatus)) && <button className="table-action" disabled={saving} onClick={() => void createTestMeeting(item)}><Video size={12} /> Create meeting link</button>}
                   {canRefreshRefund && ['pending', 'unknown'].includes(item.status) && Boolean(item.data?.providerRefundId) && <button className="table-action" disabled={saving} onClick={() => void refreshRefundStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
                   {canRefreshNotification && ['queued', 'unknown'].includes(item.status) && Boolean(item.data?.providerId) && <button className="table-action" disabled={saving} onClick={() => void refreshWhatsAppStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
+                  {canDeleteRecords && <button className="table-action danger-action" disabled={saving} onClick={() => void deleteRecord(item)}><Trash2 size={12} /> {module === 'recordings' ? 'Delete recording' : 'Delete class'}</button>}
                 </td>}
               </tr>
             ))}

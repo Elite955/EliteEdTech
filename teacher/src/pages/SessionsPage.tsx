@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Video, Filter } from 'lucide-react'
+import { Video, Filter, Trash2 } from 'lucide-react'
 import { api, getErrorMessage } from '../lib/api'
 import type { ClassSession } from '../lib/types'
 import { JoinClassDialog } from '../components/JoinClassDialog'
@@ -20,6 +20,7 @@ export function SessionsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [joining, setJoining] = useState<ClassSession | null>(null)
+  const [busyId, setBusyId] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -34,6 +35,34 @@ export function SessionsPage() {
   }, [filter])
 
   useEffect(() => { load() }, [load])
+
+  async function deleteSession(session: ClassSession) {
+    if (!window.confirm('Delete this class permanently? The booking history stays, but the session and its join link are removed.')) return
+    setBusyId(session.id)
+    setError('')
+    try {
+      await api(`/teacher/sessions/${session.id}`, { method: 'DELETE' })
+      setSessions((current) => current.filter((item) => item.id !== session.id))
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  async function deleteRecording(session: ClassSession) {
+    if (!window.confirm('Remove this recording link? Students will no longer be able to watch it.')) return
+    setBusyId(session.id)
+    setError('')
+    try {
+      await api(`/teacher/sessions/${session.id}/recording`, { method: 'DELETE' })
+      setSessions((current) => current.map((item) => (item.id === session.id ? { ...item, recording_url: null } : item)))
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setBusyId('')
+    }
+  }
 
   const filters: { label: string; value: SessionFilter }[] = [
     { label: 'All', value: 'all' },
@@ -122,10 +151,19 @@ export function SessionsPage() {
                   >
                     Details →
                   </Link>
+                  <button
+                    type="button"
+                    disabled={busyId === s.id}
+                    onClick={() => void deleteSession(s)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-700 rounded-lg text-xs font-medium hover:bg-red-50 disabled:opacity-50 transition-colors"
+                  >
+                    <Trash2 size={13} />
+                    {busyId === s.id ? 'Deleting…' : 'Delete'}
+                  </button>
                 </div>
               </div>
               {s.recording_url && (
-                <div className="mt-3 pt-3 border-t border-slate-100">
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
                   <a
                     href={s.recording_url}
                     target="_blank"
@@ -134,6 +172,15 @@ export function SessionsPage() {
                   >
                     📹 View Recording →
                   </a>
+                  <button
+                    type="button"
+                    disabled={busyId === s.id}
+                    onClick={() => void deleteRecording(s)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-red-200 text-red-700 rounded-lg text-xs font-medium hover:bg-red-50 disabled:opacity-50 transition-colors"
+                  >
+                    <Trash2 size={12} />
+                    Remove recording
+                  </button>
                 </div>
               )}
             </div>

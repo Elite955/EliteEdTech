@@ -3345,3 +3345,69 @@ a.btn:hover {
 .student-shell.is-collapsed .sidebar-brand .brand-logo-img {
   border-radius: 6px;
 }
+
+/* ---------- Elite loader (authoritative: overrides older duplicates) ---------- */
+.elite-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 3vw, 32px);
+  padding: 24px;
+  background: var(--paper, #ffffff);
+  color: #06564f;
+}
+
+.elite-loader-logo {
+  display: flex;
+  justify-content: center;
+  width: clamp(220px, 42vw, 380px);
+  max-width: 82vw;
+  height: auto;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  overflow: visible;
+  background: none !important;
+  animation: elite-loader-wipe 0.9s cubic-bezier(.3,.6,.2,1) both;
+}
+
+.elite-loader-logo-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.elite-loader-progress {
+  width: clamp(220px, 42vw, 380px);
+  height: 5px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(6, 86, 79, .14);
+  opacity: 1 !important;
+  animation: none !important;
+}
+
+.elite-loader-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #06564f, #0d8174);
+  transition: width 90ms linear;
+}
+
+.elite-loader-status {
+  display: block;
+  font: 700 14px/1 "Barlow", system-ui, sans-serif;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #06564f;
+  opacity: 1 !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elite-loader-logo { animation: none; }
+}

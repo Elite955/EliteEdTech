@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
-export const ELITE_LOADER_MS = 3500
-const ELITE_LOADER_SETTLE_MS = 250
+export const ELITE_LOADER_MS = 900
+const ELITE_LOADER_SETTLE_MS = 120
 
 export function waitForEliteLoader(startedAt) {
   return new Promise((resolve) => {

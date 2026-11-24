@@ -738,3 +738,58 @@ teacherRouter.get('/dashboard/stats', requireAuthenticatedUser, requireTeacher, 
     return next(error);
   }
 });
+
+// Teacher-initiated cleanup. Only their own sessions; always audited.
+teacherRouter.delete('/sessions/:id', requireAuthenticatedUser, requireTeacher, async (req, res, next) => {
+  try {
+    if (!idSchema.safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const { rows } = await pool.query(
+      `DELETE FROM class_sessions cs
+       USING bookings b
+       WHERE cs.id = $1 AND cs.booking_id = b.id AND b.teacher_id = $2
+       RETURNING cs.id, cs.booking_id`,
+      [req.params.id, req.auth.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Class session not found.' });
+    await writeAudit(req, {
+      actorId: req.auth.id,
+      event: 'class_session_deleted',
+      module: 'live_classes',
+      targetId: rows[0].id,
+      details: { bookingId: rows[0].booking_id },
+    });
+    return res.json({ message: 'Class session deleted.' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Clears a stored recording regardless of the consent flag, so a teacher can
+// always withdraw a recording they no longer want published.
+teacherRouter.delete('/sessions/:id/recording', requireAuthenticatedUser, requireTeacher, async (req, res, next) => {
+  try {
+    if (!idSchema.safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE class_sessions cs
+       SET recording_url = NULL
+       FROM bookings b
+       WHERE cs.id = $1 AND cs.booking_id = b.id AND b.teacher_id = $2
+       RETURNING cs.id`,
+      [req.params.id, req.auth.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Class session not found.' });
+    await writeAudit(req, {
+      actorId: req.auth.id,
+      event: 'recording_deleted',
+      module: 'live_classes',
+      targetId: req.params.id,
+    });
+    return res.json({ message: 'Recording removed.' });
+  } catch (error) {
+    return next(error);
+  }
+});
