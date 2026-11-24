@@ -8,6 +8,8 @@ import { pool } from '../db/pool.js';
 import { decryptField, encryptField } from '../security/fieldEncryption.js';
 import { writeAudit } from '../security/audit.js';
 import { requireAuthenticatedUser } from '../security/authMiddleware.js';
+import { sendWelcomeEmail } from '../notifications/notifier.js';
+import { buildWelcomeDocument } from '../documents/welcome.js';
 import { isPasswordResetConfigured, sendPasswordResetEmail } from '../security/passwordReset.js';
 import { hashPassword, passwordHashNeedsUpgrade, verifyPassword } from '../security/passwords.js';
 import { clearPortalCookies, setPortalCookie } from '../security/portals.js';
@@ -155,7 +157,6 @@ authRouter.post('/register', authLimiter, async (req, res, next) => {
     if (role === 'teacher') {
       if (!phone) return res.status(400).json({ error: 'A phone number is required for a teacher account.' });
       if (!subjects?.length) return res.status(400).json({ error: 'Add at least one subject you teach.' });
-      if (hourly_rate == null) return res.status(400).json({ error: 'An hourly rate is required for a teacher account.' });
     }
     const passwordHash = await hashPassword(password);
     const client = await pool.connect();
@@ -172,7 +173,7 @@ authRouter.post('/register', authLimiter, async (req, res, next) => {
         await client.query(
           `INSERT INTO teacher_profiles (user_id, subjects, bio, hourly_rate, approved)
            VALUES ($1, $2, $3, $4, true)`,
-          [user.id, subjects, bio ?? null, hourly_rate],
+          [user.id, subjects, bio ?? null, hourly_rate ?? null],
         );
       } else {
         await client.query('INSERT INTO student_profiles (user_id, age, grade) VALUES ($1, $2, $3)', [
@@ -188,6 +189,15 @@ authRouter.post('/register', authLimiter, async (req, res, next) => {
         module: role === 'teacher' ? 'teachers' : 'students',
         targetId: user.id,
       });
+      // Welcome email with the registration bill and getting-started steps.
+      // Never let delivery problems fail the account creation itself.
+      void (async () => {
+        const documentBuffer = await buildWelcomeDocument({ user, role });
+        const result = await sendWelcomeEmail(pool, user, { documentBuffer });
+        if (result?.status !== 'sent') {
+          console.error('Welcome email status:', result?.status, result?.error ?? '');
+        }
+      })().catch((error) => console.error('Welcome email failed:', error.message));
       return res.status(201).json({ user: { id: user.id, name: user.name, email: user.email, role } });
     } catch (error) {
       await client.query('ROLLBACK');

@@ -7,12 +7,16 @@ interface Slot {
   day_of_week: number
   start_time: string
   end_time: string
+  subject: string | null
+  hourly_rate: number | null
 }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export function AvailabilityPage() {
   const [slots, setSlots] = useState<Slot[]>([])
+  const [subjects, setSubjects] = useState<string[]>([])
+  const [defaultRate, setDefaultRate] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -20,8 +24,13 @@ export function AvailabilityPage() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api<{ items: Slot[] }>('/teacher/availability')
-      setSlots(data.items)
+      const [slotData, profile] = await Promise.all([
+        api<{ items: Slot[] }>('/teacher/availability'),
+        api<{ profile: { subjects?: string[]; hourly_rate?: number | null } }>('/teacher/profile'),
+      ])
+      setSlots(slotData.items)
+      setSubjects(profile.profile.subjects ?? [])
+      setDefaultRate(profile.profile.hourly_rate ?? 0)
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -34,7 +43,13 @@ export function AvailabilityPage() {
   const addSlot = () => {
     setSlots(prev => [
       ...prev,
-      { day_of_week: 1, start_time: '09:00', end_time: '10:00' },
+      {
+        day_of_week: 1,
+        start_time: '09:00',
+        end_time: '10:00',
+        subject: subjects[0] ?? null,
+        hourly_rate: defaultRate,
+      },
     ])
   }
 
@@ -42,7 +57,7 @@ export function AvailabilityPage() {
     setSlots(prev => prev.filter((_, i) => i !== index))
   }
 
-  const updateSlot = (index: number, field: keyof Slot, value: string | number) => {
+  const updateSlot = (index: number, field: keyof Slot, value: string | number | null) => {
     setSlots(prev =>
       prev.map((slot, i) => (i === index ? { ...slot, [field]: value } : slot))
     )
@@ -55,7 +70,15 @@ export function AvailabilityPage() {
     try {
       await api('/teacher/availability', {
         method: 'PUT',
-        body: JSON.stringify({ slots }),
+        body: JSON.stringify({
+          slots: slots.map((slot) => ({
+            day_of_week: slot.day_of_week,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            subject: slot.subject,
+            hourlyRate: Number(slot.hourly_rate ?? 0),
+          })),
+        }),
       })
       setSuccess('Availability saved successfully!')
       setTimeout(() => setSuccess(''), 3000)
@@ -143,6 +166,8 @@ export function AvailabilityPage() {
                         <Trash2 size={12} />
                       </button>
                     </div>
+                    <div className="mt-1 text-[11px] text-blue-700">{s.subject || 'Any subject'}</div>
+                    <div className="mt-0.5 text-[11px] font-semibold text-blue-900">₹{s.hourly_rate ?? 0}/hr</div>
                   </div>
                 ))}
               </div>
@@ -176,6 +201,25 @@ export function AvailabilityPage() {
                     <option key={di} value={di}>{d}</option>
                   ))}
                 </select>
+                <select
+                  value={slot.subject ?? ''}
+                  onChange={e => updateSlot(i, 'subject', e.target.value || null)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                >
+                  <option value="">Any subject</option>
+                  {subjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+                </select>
+                <input
+                  type="number"
+                  min={0}
+                  max={4999}
+                  step={1}
+                  value={slot.hourly_rate ?? ''}
+                  onChange={e => updateSlot(i, 'hourly_rate', e.target.value === '' ? null : Number(e.target.value))}
+                  className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  aria-label="Hourly rate in rupees"
+                />
+                <span className="text-xs text-slate-400">₹/hr</span>
                 <input
                   type="time"
                   value={slot.start_time}

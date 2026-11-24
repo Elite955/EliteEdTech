@@ -267,15 +267,23 @@ Notes:
 
 ### Teacher hourly rate
 
-Teachers (and admins) can set any rate from **₹0 to ₹4,999 per hour**. It is
-enforced in the UI, the API validation, and a database CHECK constraint, so no
-path can store a rate outside that range. The booking amount is always computed
-server-side as `hours × rate`.
+Teachers set the rate **when they publish an availability slot**, together with
+the subject and time — not during registration. The rate can be any value from
+**₹0 to ₹4,999 per hour**, enforced in the UI, API validation, and a database
+CHECK constraint. The booking amount is computed on the server as
+`hours × the rate on the chosen slot`, so the browser cannot change it.
 
-A teacher who sets **₹0** offers free classes: the student skips Razorpay
-entirely, the booking is confirmed immediately, and the Jitsi link and receipt
-email are generated straight away. This is handled by `/api/payments/order`
-returning `{ "free": true }`; there is no zero-amount Razorpay order.
+On successful registration, every user receives a welcome email with a PDF
+account summary (registration bill: ₹0) and step-by-step instructions.
+
+A teacher who sets **₹0** on a slot offers free classes: the student skips
+Razorpay entirely, the booking is confirmed immediately, and the Jitsi link and
+receipt email are generated straight away. This is handled by
+`/api/payments/order` returning `{ "free": true }`; there is no zero-amount
+Razorpay order.
+
+If Razorpay's webhook confirms a payment before the browser does, `/verify`
+returns `{"status":"paid","alreadyConfirmed":true}` instead of an error.
 
 ## Troubleshooting
 

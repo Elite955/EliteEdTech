@@ -179,7 +179,6 @@ const profileUpdateSchema = z.object({
   phone: z.string().trim().max(20).nullable().optional(),
   bio: z.string().trim().max(600).nullable().optional(),
   subjects: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
-  hourlyRate: z.number().min(0).max(4999).nullable().optional(),
 });
 
 teacherRouter.patch('/profile', requireAuthenticatedUser, requireTeacher, async (req, res, next) => {
@@ -191,7 +190,7 @@ teacherRouter.patch('/profile', requireAuthenticatedUser, requireTeacher, async 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { name, phone, bio, subjects, hourlyRate } = parsed.data;
+    const { name, phone, bio, subjects } = parsed.data;
     if (name !== undefined || phone !== undefined) {
       const result = await client.query(
         `UPDATE users
@@ -210,11 +209,10 @@ teacherRouter.patch('/profile', requireAuthenticatedUser, requireTeacher, async 
     const teacherUpdate = await client.query(
       `UPDATE teacher_profiles
        SET subjects = COALESCE($2, subjects),
-           bio = CASE WHEN $5 THEN $3 ELSE bio END,
-           hourly_rate = CASE WHEN $6 THEN $4 ELSE hourly_rate END
+           bio = CASE WHEN $4 THEN $3 ELSE bio END
        WHERE user_id = $1
        RETURNING user_id`,
-      [req.auth.id, subjects ?? null, bio ?? null, hourlyRate ?? null, bio !== undefined, hourlyRate !== undefined],
+      [req.auth.id, subjects ?? null, bio ?? null, bio !== undefined],
     );
     if (!teacherUpdate.rowCount) {
       await client.query('ROLLBACK');
@@ -235,7 +233,7 @@ teacherRouter.get('/availability', requireAuthenticatedUser, requireTeacher, asy
   try {
     const { rows } = await pool.query(
       `SELECT id, teacher_id, weekday, to_char(start_time, 'HH24:MI') AS start_time,
-              to_char(end_time, 'HH24:MI') AS end_time
+              to_char(end_time, 'HH24:MI') AS end_time, subject, hourly_rate
        FROM teacher_availability
        WHERE teacher_id = $1
        ORDER BY weekday, start_time`,
@@ -248,6 +246,8 @@ teacherRouter.get('/availability', requireAuthenticatedUser, requireTeacher, asy
         day_of_week: row.weekday,
         start_time: row.start_time,
         end_time: row.end_time,
+        subject: row.subject ?? null,
+        hourly_rate: row.hourly_rate === null ? null : Number(row.hourly_rate),
       })),
     });
   } catch (error) {
@@ -263,6 +263,8 @@ const availabilitySchema = z.object({
           day_of_week: z.number().int().min(0).max(6),
           start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
           end_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+          subject: z.string().trim().min(1).max(120).nullable().optional(),
+          hourlyRate: z.number().min(0).max(4999),
         })
         .refine((slot) => slot.end_time > slot.start_time, { message: 'Each slot must end after it starts.' }),
     )
@@ -285,9 +287,9 @@ teacherRouter.put('/availability', requireAuthenticatedUser, requireTeacher, asy
     await client.query('DELETE FROM teacher_availability WHERE teacher_id = $1', [req.auth.id]);
     for (const slot of slots) {
       await client.query(
-        `INSERT INTO teacher_availability (teacher_id, weekday, start_time, end_time)
-         VALUES ($1, $2, $3, $4)`,
-        [req.auth.id, slot.day_of_week, slot.start_time, slot.end_time],
+        `INSERT INTO teacher_availability (teacher_id, weekday, start_time, end_time, subject, hourly_rate)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [req.auth.id, slot.day_of_week, slot.start_time, slot.end_time, slot.subject ?? null, slot.hourlyRate],
       );
     }
     await client.query('COMMIT');
@@ -300,7 +302,7 @@ teacherRouter.put('/availability', requireAuthenticatedUser, requireTeacher, asy
     });
     const { rows } = await pool.query(
       `SELECT id, teacher_id, weekday, to_char(start_time, 'HH24:MI') AS start_time,
-              to_char(end_time, 'HH24:MI') AS end_time
+              to_char(end_time, 'HH24:MI') AS end_time, subject, hourly_rate
        FROM teacher_availability
        WHERE teacher_id = $1
        ORDER BY weekday, start_time`,
@@ -313,6 +315,8 @@ teacherRouter.put('/availability', requireAuthenticatedUser, requireTeacher, asy
         day_of_week: row.weekday,
         start_time: row.start_time,
         end_time: row.end_time,
+        subject: row.subject ?? null,
+        hourly_rate: row.hourly_rate === null ? null : Number(row.hourly_rate),
       })),
     });
   } catch (error) {

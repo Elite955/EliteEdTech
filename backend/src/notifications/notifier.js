@@ -286,6 +286,41 @@ export function bookingCopy(recipient, context) {
       'The EDtech Team',
     ]);
 }
+export async function sendWelcomeEmail(pool, recipient, { documentBuffer }) {
+  const subject = `Welcome to ELITE, ${recipient.name ?? 'there'} - your account is ready`;
+  const body = [
+    `Hi ${recipient.name ?? 'there'},`,
+    '',
+    'Your account was created successfully.',
+    '',
+    roleLabel(recipient.role),
+    '',
+    `Open your portal: ${portalUrl({}, recipient.role === 'teacher' ? 'teacher' : 'student')}`,
+    '',
+    'Your registration bill is INR 0.00. You only pay for booked classes.',
+    'A PDF summary is attached with the bill and step-by-step instructions.',
+    '',
+    'The ELITE Team',
+  ].join('\n');
+  return sendEmail(pool, recipient, {
+    subject,
+    body,
+    html: htmlEmail(recipient, {}, subject, body),
+    kind: 'general',
+    attachments: [{
+      filename: 'ELITE-welcome-summary.pdf',
+      contentType: 'application/pdf',
+      content: documentBuffer,
+    }],
+  });
+}
+
+function roleLabel(role) {
+  return role === 'teacher'
+    ? 'Next: open Availability to publish your subject, teaching times, and hourly rate.'
+    : 'Next: browse teachers, book a slot, and pay after the teacher approves it.';
+}
+
 export async function sendBookingDetails(pool, recipients, context) {
   const results = [];
   for (const recipient of recipients) {

@@ -14,7 +14,6 @@ export function RegisterPage() {
     phone: '',
     password: '',
     subjects: '',
-    hourlyRate: '',
     bio: '',
   })
   const [busy, setBusy] = useState(false)
@@ -38,7 +37,6 @@ export function RegisterPage() {
           phone: form.phone.trim(),
           password: form.password,
           subjects: form.subjects.split(',').map((item) => item.trim()).filter(Boolean),
-          hourly_rate: form.hourlyRate ? Number(form.hourlyRate) : undefined,
           bio: form.bio.trim() || undefined,
         }),
       })
@@ -98,10 +96,6 @@ export function RegisterPage() {
                 <span className="block text-sm font-medium text-slate-700 mb-1.5">Subjects you teach</span>
                 <input required value={form.subjects} onChange={set('subjects')} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Mathematics, Algebra" />
                 <span className="block text-xs text-slate-400 mt-1">Separate multiple subjects with commas.</span>
-              </label>
-              <label className="block">
-                <span className="block text-sm font-medium text-slate-700 mb-1.5">Hourly rate (₹)</span>
-                <input required type="number" min={0} max={4999} value={form.hourlyRate} onChange={set('hourlyRate')} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="450" />
               </label>
               <label className="block sm:col-span-2">
                 <span className="block text-sm font-medium text-slate-700 mb-1.5">Short bio</span>

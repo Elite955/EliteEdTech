@@ -121,10 +121,12 @@ studentRouter.get('/teachers', requireAuthenticatedUser, requireStudent, async (
     const search = parsed.data.search ?? '';
     const pattern = `%${search}%`;
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, tp.subjects, tp.bio, tp.hourly_rate,
+      `SELECT u.id, u.name, tp.subjects, tp.bio,
+              COALESCE(tp.hourly_rate, MAX(ta.hourly_rate), 0) AS hourly_rate,
               COALESCE(
                 json_agg(
-                  jsonb_build_object('day', ta.weekday, 'start', to_char(ta.start_time, 'HH24:MI'), 'end', to_char(ta.end_time, 'HH24:MI'))
+                  jsonb_build_object('day', ta.weekday, 'start', to_char(ta.start_time, 'HH24:MI'),
+                    'end', to_char(ta.end_time, 'HH24:MI'), 'rate', ta.hourly_rate, 'subject', ta.subject)
                   ORDER BY ta.weekday, ta.start_time
                 ) FILTER (WHERE ta.id IS NOT NULL),
                 '[]'::json
@@ -147,7 +149,13 @@ studentRouter.get('/teachers', requireAuthenticatedUser, requireStudent, async (
         subjects: row.subjects ?? [],
         bio: row.bio,
         hourly_rate: Number(row.hourly_rate),
-        availability: row.availability.map((slot) => ({ day: WEEKDAYS[slot.day], start: slot.start, end: slot.end })),
+        availability: row.availability.map((slot) => ({
+          day: WEEKDAYS[slot.day],
+          start: slot.start,
+          end: slot.end,
+          rate: slot.rate == null ? null : Number(slot.rate),
+          subject: slot.subject ?? null,
+        })),
       })),
     });
   } catch (error) {
@@ -244,8 +252,21 @@ studentRouter.post('/bookings', requireAuthenticatedUser, requireStudent, async 
       return res.status(409).json({ error: 'That slot was just booked by someone else. Pick another time.' });
     }
 
+    // The teacher sets the rate (and subject) when they publish an availability
+    // slot, not at sign-up. Fall back to the legacy profile rate for old slots.
+    const { rows: slotRows } = await pool.query(
+      `SELECT hourly_rate FROM teacher_availability
+       WHERE teacher_id = $1 AND weekday = $2
+         AND start_time = $3::time AND end_time = $4::time
+       LIMIT 1`,
+      [teacher_id, weekday, start_time, end_time],
+    );
+    const effectiveRate = slotRows[0]?.hourly_rate != null
+      ? Number(slotRows[0].hourly_rate)
+      : Number(teacher.hourly_rate ?? 0);
+
     const hours = minutes / 60;
-    const amount = Math.round(hours * Number(teacher.hourly_rate) * 100) / 100;
+    const amount = Math.round(hours * effectiveRate * 100) / 100;
 
     const { rows: inserted } = await pool.query(
       `INSERT INTO bookings (student_id, teacher_id, starts_at, ends_at, amount)
@@ -474,15 +495,28 @@ studentRouter.post('/payments/verify', requireAuthenticatedUser, requireStudent,
       return res.status(400).json({ error: 'The payment signature could not be verified. Contact support before retrying.' });
     }
 
+    // The webhook can confirm the payment before the browser calls /verify.
+    // Treat an already-succeeded payment as success instead of reporting an
+    // error for a checkout that actually completed.
     const { rows } = await pool.query(
-      `SELECT booking_id FROM payments
-       WHERE COALESCE(provider_order_id, provider_transaction_id) = $1
-         AND student_id = $2 AND status = 'pending'`,
-      [razorpay_order_id, req.auth.id],
+      `SELECT p.booking_id, p.status
+       FROM payments p JOIN bookings b ON b.id = p.booking_id
+       WHERE (COALESCE(p.provider_order_id, p.provider_transaction_id) = $1
+              OR p.provider_transaction_id = $2)
+         AND b.student_id = $3
+       ORDER BY CASE WHEN p.status = 'succeeded' THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [razorpay_order_id, razorpay_payment_id, req.auth.id],
     );
     const payment = rows[0];
     if (!payment) {
-      return res.status(400).json({ error: 'No pending payment matches this checkout session.' });
+      return res.status(400).json({ error: 'No matching payment was found for this checkout session.' });
+    }
+    if (payment.status === 'succeeded') {
+      return res.json({ status: 'paid', alreadyConfirmed: true });
+    }
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ error: 'This payment is no longer pending.' });
     }
 
     // The payment is already confirmed by the signature. A meeting-provider or

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
-import { BookOpen, DollarSign, Save, User, X } from 'lucide-react'
+import { BookOpen, Save, User, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import { api, getErrorMessage } from '../lib/api'
 import { playUiSound } from '../lib/sound'
@@ -21,7 +21,6 @@ export function ProfileDialog({ onClose, returnFocusRef }: ProfileDialogProps) {
   const [phone, setPhone] = useState('')
   const [bio, setBio] = useState('')
   const [subjects, setSubjects] = useState('')
-  const [hourlyRate, setHourlyRate] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
 
@@ -40,7 +39,6 @@ export function ProfileDialog({ onClose, returnFocusRef }: ProfileDialogProps) {
         setPhone(data.profile.phone ?? '')
         setBio(data.profile.bio ?? '')
         setSubjects((data.profile.subjects ?? []).join(', '))
-        setHourlyRate(data.profile.hourly_rate?.toString() ?? '')
       } catch (err) {
         if (active) setError(getErrorMessage(err))
       } finally {
@@ -85,7 +83,6 @@ export function ProfileDialog({ onClose, returnFocusRef }: ProfileDialogProps) {
         phone: phone.trim() || null,
         bio: bio.trim() || null,
         subjects: subjects.split(',').map((subject) => subject.trim()).filter(Boolean),
-        hourlyRate: hourlyRate ? Number(hourlyRate) : null,
       }
       const data = await api<{ profile: TeacherProfile }>('/teacher/profile', {
         method: 'PATCH',
@@ -206,20 +203,7 @@ export function ProfileDialog({ onClose, returnFocusRef }: ProfileDialogProps) {
             </div>
 
             <div className="profile-dialog-section">
-              <h3><DollarSign size={16} /> Hourly rate</h3>
-              <label className="profile-dialog-field profile-dialog-rate">
-                <span>Rate per hour (₹0 - ₹4,999)</span>
-                <input
-                  type="number"
-                  value={hourlyRate}
-                  onChange={(event) => setHourlyRate(event.target.value)}
-                  min={0}
-                  max={4999}
-                  step={1}
-                  placeholder="500"
-                />
-                <small>Students see this rate. Booking amount = hours x rate.</small>
-              </label>
+              <p className="text-xs text-slate-400">Your hourly rate and subject are set when you publish an availability slot in the Availability page.</p>
             </div>
 
             <div className="profile-dialog-actions">

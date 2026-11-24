@@ -337,10 +337,26 @@ CREATE TABLE IF NOT EXISTS teacher_availability (
   weekday SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
+  subject TEXT,
+  hourly_rate NUMERIC(10, 2),
   CHECK (end_time > start_time),
+  CHECK (hourly_rate IS NULL OR (hourly_rate >= 0 AND hourly_rate <= 4999)),
   UNIQUE (teacher_id, weekday, start_time, end_time)
 );
 CREATE INDEX IF NOT EXISTS teacher_availability_teacher_idx ON teacher_availability(teacher_id, weekday);
+
+-- Rates and subjects are set per availability slot. Backfill existing slots
+-- from the legacy profile-level rate so current pricing never changes.
+ALTER TABLE teacher_availability ADD COLUMN IF NOT EXISTS subject TEXT;
+ALTER TABLE teacher_availability ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(10, 2);
+ALTER TABLE teacher_availability DROP CONSTRAINT IF EXISTS teacher_availability_hourly_rate_check;
+ALTER TABLE teacher_availability ADD CONSTRAINT teacher_availability_hourly_rate_check
+  CHECK (hourly_rate IS NULL OR (hourly_rate >= 0 AND hourly_rate <= 4999));
+UPDATE teacher_availability ta
+   SET subject = tp.subjects[1], hourly_rate = tp.hourly_rate
+  FROM teacher_profiles tp
+ WHERE tp.user_id = ta.teacher_id
+   AND (ta.hourly_rate IS NULL OR ta.subject IS NULL);
 
 CREATE TABLE IF NOT EXISTS feedback (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
