@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { createFullRefund, getRefundStatus, isRazorpayTestConfigured } from './razorpay.js';
+import { verifyWebhookSignature } from '../payments/razorpay.js';
 import { createTestGoogleMeetSpace, isGoogleMeetTestConfigured } from './googleMeet.js';
 
 const razorpayEnv = {
@@ -114,4 +116,20 @@ test('Google Meet rejects a non-Meet URL as an uncertain creation result', async
     }),
     (error) => error.outcomeUncertain === true && /unexpected link/.test(error.message),
   );
+});
+
+
+test('Razorpay webhook signature verification uses only the configured secret', () => {
+  const previous = process.env.RAZORPAY_WEBHOOK_SECRET;
+  process.env.RAZORPAY_WEBHOOK_SECRET = 'whsec_test';
+  try {
+    const rawBody = JSON.stringify({ event: 'payment.captured', payload: { payment: { entity: { id: 'pay_test' } } } });
+    const signature = createHmac('sha256', 'whsec_test').update(rawBody).digest('hex');
+    assert.equal(verifyWebhookSignature({ rawBody, signature }), true);
+    assert.equal(verifyWebhookSignature({ rawBody, signature: 'not-a-signature' }), false);
+    assert.equal(verifyWebhookSignature({ rawBody, signature: null }), false);
+  } finally {
+    if (previous === undefined) delete process.env.RAZORPAY_WEBHOOK_SECRET;
+    else process.env.RAZORPAY_WEBHOOK_SECRET = previous;
+  }
 });

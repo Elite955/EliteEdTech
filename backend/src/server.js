@@ -52,7 +52,11 @@ app.use(cookieParser());
 app.get('/api/integrations/status', (_req, res) => {
   const notifications = notificationConfiguration();
   return res.json({
-    payments: { razorpay: razorpayConfigured(), testMode: process.env.RAZORPAY_TEST_MODE !== 'false' },
+    payments: {
+      razorpay: razorpayConfigured(),
+      testMode: process.env.RAZORPAY_TEST_MODE !== 'false',
+      webhook: Boolean(process.env.RAZORPAY_WEBHOOK_SECRET),
+    },
     meetings: { provider: selectedMeetingProviderId() },
     email: { configured: notifications.email.configured, missingKeys: notifications.email.missingKeys },
   });
