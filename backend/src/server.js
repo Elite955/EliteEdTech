@@ -58,7 +58,7 @@ app.get('/api/integrations/status', (_req, res) => {
       webhook: Boolean(process.env.RAZORPAY_WEBHOOK_SECRET),
     },
     meetings: { provider: selectedMeetingProviderId() },
-    email: { configured: notifications.email.configured, missingKeys: notifications.email.missingKeys },
+    email: { configured: notifications.email.configured, missingKeys: notifications.email.missingKeys, provider: notifications.email.provider },
   });
 });
 

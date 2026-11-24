@@ -70,6 +70,10 @@ function emailTestRecipients() {
     .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
 }
 
+export function emailProvider() {
+  return emailApiConfigured() ? 'brevo' : 'smtp';
+}
+
 export function notificationConfiguration() {
   const emailMissing = [];
   if (!emailApiConfigured()) {
@@ -81,7 +85,7 @@ export function notificationConfiguration() {
   if (testEnvironment() && !emailTestRecipients().length) emailMissing.push('BOOKING_EMAIL_TEST_RECIPIENTS');
 
   return {
-    email: { configured: emailMissing.length === 0, missingKeys: emailMissing },
+    email: { configured: emailMissing.length === 0, missingKeys: emailMissing, provider: emailProvider() },
   };
 }
 
