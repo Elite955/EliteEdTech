@@ -14,6 +14,9 @@ import { teacherRouter } from './routes/teacher.js';
 import { censorContent } from './security/profanity.js';
 import { PORTAL_COOKIES, normalizePortal, portalFromOrigin } from './security/portals.js';
 import { registerWhiteboardHandlers } from './realtime/whiteboard.js';
+import { razorpayConfigured } from './payments/razorpay.js';
+import { notificationConfiguration } from './notifications/notifier.js';
+import { selectedMeetingProviderId } from './meetings/provider.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must be set to a random value of at least 32 characters.');
@@ -43,6 +46,18 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/payments/webhook', express.raw({ type: 'application/json', limit: '256kb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+
+// Status flags only — never exposes keys or secrets. Handy when checking a
+// fresh deployment from the browser or with curl.
+app.get('/api/integrations/status', (_req, res) => {
+  const notifications = notificationConfiguration();
+  return res.json({
+    payments: { razorpay: razorpayConfigured(), testMode: process.env.RAZORPAY_TEST_MODE !== 'false' },
+    meetings: { provider: selectedMeetingProviderId() },
+    email: { configured: notifications.email.configured, missingKeys: notifications.email.missingKeys },
+    whatsapp: { configured: notifications.whatsapp.configured, missingKeys: notifications.whatsapp.missingKeys },
+  });
+});
 
 app.get('/api/health', async (_req, res, next) => {
   try {
