@@ -1387,3 +1387,79 @@ a.btn:hover {
 @media (prefers-reduced-motion: reduce) {
   .elite-loader-logo { animation: none; }
 }
+
+/* ---------- Login top bar + brand contrast ---------- */
+.login-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(390px, .92fr) minmax(450px, 1.08fr);
+}
+
+/* The logo is dark teal, so it disappears on the dark brand panel. */
+.login-brand .brand-logo-img {
+  filter: brightness(0) invert(1);
+}
+
+.login-brand {
+  min-height: 0;
+}
+
+.login-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 10px clamp(18px, 4vw, 40px);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  z-index: 6;
+}
+
+.login-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  font: 700 15px/1.2 var(--font-display);
+}
+
+.login-topbar-brand img {
+  display: block;
+  height: 30px;
+  width: auto;
+  max-height: 30px;
+}
+
+.login-topbar-tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (max-width: 680px) {
+  .login-body {
+    display: block;
+  }
+
+  .login-panel {
+    min-height: calc(100svh - 70px);
+  }
+
+  .login-topbar {
+    min-height: 58px;
+    padding: 8px 18px;
+  }
+
+  .login-topbar-tag {
+    display: none;
+  }
+}
