@@ -1449,3 +1449,45 @@ adminRouter.delete('/modules/:module/:id', requireAdmin, async (req, res, next) 
     return res.json({ message: 'Class session deleted.' });
   } catch (error) { return next(error); }
 });
+
+adminRouter.post('/live-classes/:id/cancel', requireAdmin, requirePermission('live_classes', 'manage'), async (req, res, next) => {
+  try {
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE class_sessions SET status = 'cancelled'
+       WHERE id = $1 AND status IN ('scheduled', 'ongoing')
+       RETURNING booking_id`,
+      [req.params.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Class session not found or already ended.' });
+    await pool.query(
+      `UPDATE bookings SET status = 'cancelled' WHERE id = $1 AND status IN ('pending', 'approved')`,
+      [rows[0].booking_id],
+    );
+    await writeAudit(req, { event: 'class_session_cancelled', module: 'live_classes', targetId: req.params.id });
+    return res.json({ message: 'Class cancelled.' });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post('/live-classes/:id/end', requireAdmin, requirePermission('live_classes', 'manage'), async (req, res, next) => {
+  try {
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE class_sessions SET status = 'completed', ended_at = COALESCE(ended_at, now())
+       WHERE id = $1 AND status IN ('scheduled', 'ongoing')
+       RETURNING booking_id`,
+      [req.params.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Class session not found or already ended.' });
+    await pool.query(
+      `UPDATE bookings SET status = 'completed' WHERE id = $1 AND status IN ('paid', 'approved')`,
+      [rows[0].booking_id],
+    );
+    await writeAudit(req, { event: 'class_session_ended', module: 'live_classes', targetId: req.params.id });
+    return res.json({ message: 'Class ended.' });
+  } catch (error) { return next(error); }
+});

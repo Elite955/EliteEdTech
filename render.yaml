@@ -28,6 +28,12 @@ services:
         value: jitsi
       - key: JITSI_TEST_MODE
         value: "true"
+      - key: JAAS_APP_ID
+        sync: false
+      - key: JAAS_API_KEY_ID
+        sync: false
+      - key: JAAS_PRIVATE_KEY
+        sync: false
       # Fill these in the Render dashboard after creating the service.
       - key: DATABASE_URL
         sync: false

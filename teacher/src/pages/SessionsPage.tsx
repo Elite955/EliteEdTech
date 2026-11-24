@@ -50,6 +50,20 @@ export function SessionsPage() {
     }
   }
 
+  async function cancelSession(session: ClassSession) {
+    if (!window.confirm('Cancel this class? The student will see it as cancelled.')) return
+    setBusyId(session.id)
+    setError('')
+    try {
+      await api(`/teacher/sessions/${session.id}/cancel`, { method: 'POST' })
+      setSessions((current) => current.map((item) => (item.id === session.id ? { ...item, status: 'cancelled' } : item)))
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setBusyId('')
+    }
+  }
+
   async function deleteRecording(session: ClassSession) {
     if (!window.confirm('Remove this recording link? Students will no longer be able to watch it.')) return
     setBusyId(session.id)
@@ -151,6 +165,16 @@ export function SessionsPage() {
                   >
                     Details →
                   </Link>
+                  {['scheduled', 'ongoing'].includes(s.status) && (
+                    <button
+                      type="button"
+                      disabled={busyId === s.id}
+                      onClick={() => void cancelSession(s)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-50 disabled:opacity-50 transition-colors"
+                    >
+                      Cancel class
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={busyId === s.id}

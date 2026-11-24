@@ -257,6 +257,35 @@ Notes:
   into chat or a ticket, rotate it in Razorpay immediately.
 - Razorpay charges ~2% + GST per transaction; there is no free live tier.
 
+## 6b. Teacher moderator (JaaS Dev, free)
+
+Public `meet.jit.si` requires the first person in a room to log in with Google,
+GitHub or Facebook before the conference starts. Anonymous embeds cannot be
+promoted to moderator. To make the teacher an automatic moderator, use the free
+**8x8 JaaS Dev** plan (25 monthly active users).
+
+1. Sign up 👉 https://jaas.8x8.vc
+2. In the JaaS Console, create an **API Key** and download its **private key**
+   (RS256). Note the **App ID** (looks like `vpaas-magic-cookie-…`) and the
+   **Key ID / kid**.
+3. On Render set:
+
+```
+JAAS_APP_ID       = vpaas-magic-cookie-...
+JAAS_API_KEY_ID   = <kid from the JaaS console>
+JAAS_PRIVATE_KEY  = <PEM private key; literal \n is accepted>
+```
+
+4. Save → Render redeploys. The join dialog now loads
+   `https://<APP_ID>.8x8.vc/external_api.js` and passes a short-lived JWT with
+   `context.user.moderator = true` for teachers and `false` for students.
+   The teacher joins as moderator and the class starts immediately.
+
+If these variables are left empty, the app falls back to public Jitsi. In that
+mode the teacher must open the room in a new tab, log in with Google/GitHub/
+Facebook, and then students can join. Also note `meet.jit.si` now limits rooms
+to 95 minutes. JaaS recording/streaming are paid add-ons.
+
 ## 7. End-to-end test
 
 1. Student registers → enrolls authenticator

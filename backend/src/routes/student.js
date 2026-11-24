@@ -10,6 +10,7 @@ import { ensureSessionMeeting } from '../meetings/service.js';
 import { selectedMeetingProviderId } from '../meetings/provider.js';
 import { buildPaymentReceipt } from '../payments/receipt.js';
 import { sendBookingDetails } from '../notifications/notifier.js';
+import { jaasJoinDetails } from '../integrations/jaas.js';
 
 export const studentRouter = Router();
 
@@ -760,9 +761,11 @@ studentRouter.post('/sessions/:id/meeting', requireAuthenticatedUser, requireStu
         : result.status === 'failed' ? 502
           : result.status === 'unavailable' ? 400
             : 200;
+    const joinUrl = result.joinUrl ?? result.session?.meeting_url ?? null;
     return res.status(httpStatus).json({
       status: result.status,
-      joinUrl: result.joinUrl ?? result.session?.meeting_url ?? null,
+      joinUrl,
+      jaas: jaasJoinDetails({ joinUrl, user: req.auth, moderator: false }),
       meetingId: result.meetingId ?? null,
       error: result.error ?? null,
       missingKeys: result.missingKeys ?? [],

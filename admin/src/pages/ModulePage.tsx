@@ -261,6 +261,22 @@ export function ModulePage() {
     } finally { setSaving(false) }
   }
 
+  async function liveClassAction(item: ModuleRecord, action: 'cancel' | 'end') {
+    if (!window.confirm(`${action === 'end' ? 'End' : 'Cancel'} class session "${item.title}"? This will be audited.`)) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const result = await api<{ message: string }>(`/admin/live-classes/${item.id}/${action}`, { method: 'POST' })
+      setNotice(`${result.message} Administrative action logged.`)
+      celebrate(action === 'end' ? 'Class ended' : 'Class cancelled')
+      await load()
+    } catch (requestError) {
+      playUiSound('error')
+      setError(getErrorMessage(requestError))
+    } finally { setSaving(false) }
+  }
+
   async function deleteRecord(item: ModuleRecord) {
     const subject = module === 'recordings' ? `recording for "${item.title}"` : `class session "${item.title}"`
     if (!window.confirm(`Delete the ${subject} permanently? This action will be audited.`)) return
@@ -296,7 +312,7 @@ export function ModulePage() {
 
   if (!info) return <div className="alert alert-error">This admin module is not recognized.</div>
   const canCreate = info.editable && editableModules.has(module) && can(module, 'create')
-  const hasRowActions = canRefund || canRecordPayment || canCreateMeeting || canRefreshRefund || canDeleteRecords
+  const hasRowActions = canRefund || canRecordPayment || canCreateMeeting || canRefreshRefund || canDeleteRecords || module === 'live_classes'
 
   return (
     <div className="module-page">
@@ -332,6 +348,12 @@ export function ModulePage() {
                   {canRecordPayment && item.status === 'approved' && <button className="table-action" disabled={saving} onClick={() => { setRecordingBooking(item); setTransactionReference(''); setPaymentVerified(false); setError('') }}>Record bank transfer</button>}
                   {canCreateMeeting && item.status === 'scheduled' && !item.data?.meetingUrl && !['creating', 'created', 'unknown'].includes(String(item.data?.meetingCreationStatus)) && <button className="table-action" disabled={saving} onClick={() => void createTestMeeting(item)}><Video size={12} /> Create meeting link</button>}
                   {canRefreshRefund && ['pending', 'unknown'].includes(item.status) && Boolean(item.data?.providerRefundId) && <button className="table-action" disabled={saving} onClick={() => void refreshRefundStatus(item)}><RefreshCw size={12} /> Check provider status</button>}
+                  {module === 'live_classes' && ['scheduled', 'ongoing'].includes(item.status) && (
+                    <>
+                      {item.status === 'ongoing' && <button className="table-action danger-action" disabled={saving} onClick={() => void liveClassAction(item, 'end')}><Video size={12} /> End class</button>}
+                      <button className="table-action danger-action" disabled={saving} onClick={() => void liveClassAction(item, 'cancel')}><X size={12} /> Cancel class</button>
+                    </>
+                  )}
                   {canDeleteRecords && <button className="table-action danger-action" disabled={saving} onClick={() => void deleteRecord(item)}><Trash2 size={12} /> {module === 'recordings' ? 'Delete recording' : 'Delete class'}</button>}
                 </td>}
               </tr>

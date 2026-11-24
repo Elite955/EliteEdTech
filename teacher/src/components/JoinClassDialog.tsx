@@ -12,6 +12,7 @@ interface JitsiApiOptions {
   width: string
   height: string
   parentNode: HTMLElement
+  jwt?: string
   userInfo?: { displayName: string }
   lang: string
   configOverwrite?: Record<string, unknown>
@@ -19,8 +20,9 @@ interface JitsiApiOptions {
 }
 
 declare global {
+  interface JitsiApiInstance { dispose: () => void; executeCommand?: (command: string, ...args: unknown[]) => void }
   interface Window {
-    JitsiMeetExternalAPI?: new (domain: string, options: JitsiApiOptions) => { dispose: () => void }
+    JitsiMeetExternalAPI?: new (domain: string, options: JitsiApiOptions) => JitsiApiInstance
   }
 }
 
@@ -29,16 +31,17 @@ type MeetingReply = {
   joinUrl: string | null
   meetingId: string | null
   error: string | null
+  jaas?: { domain: string; roomName: string; jwt: string; moderator: boolean } | null
 }
 
-let jitsiApiScript: Promise<void> | null = null
+const jitsiApiScripts = new Map<string, Promise<void>>()
 
-function loadJitsiApi(): Promise<void> {
+function loadJitsiApi(domain = JITSI_DOMAIN): Promise<void> {
   if (typeof window.JitsiMeetExternalAPI === 'function') return Promise.resolve()
-  if (!jitsiApiScript) {
-    jitsiApiScript = new Promise<void>((resolve, reject) => {
+  if (!jitsiApiScripts.has(domain)) {
+    const scriptPromise = new Promise<void>((resolve, reject) => {
       const script = document.createElement('script')
-      script.src = `https://${JITSI_DOMAIN}/external_api.js`
+      script.src = `https://${domain}/external_api.js`
       script.async = true
       script.onload = () => resolve()
       script.onerror = () => {
@@ -47,11 +50,12 @@ function loadJitsiApi(): Promise<void> {
       }
       document.head.appendChild(script)
     }).catch((error: unknown) => {
-      jitsiApiScript = null
+      jitsiApiScripts.delete(domain)
       throw error
     })
+    jitsiApiScripts.set(domain, scriptPromise)
   }
-  return jitsiApiScript
+  return jitsiApiScripts.get(domain)!
 }
 
 function jitsiRoomName(joinUrl: string | null): string {
@@ -69,23 +73,29 @@ function jitsiRoomName(joinUrl: string | null): string {
 function JitsiMeetingFrame({
   roomName,
   displayName,
+  jaas,
   onError,
+  onApiReady,
 }: {
   roomName: string
   displayName?: string
+  jaas?: MeetingReply['jaas']
   onError: (message: string) => void
+  onApiReady?: (api: JitsiApiInstance) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let active = true
-    let meetingApi: { dispose: () => void } | null = null
-    void loadJitsiApi()
+    let meetingApi: JitsiApiInstance | null = null
+    const domain = jaas?.domain || JITSI_DOMAIN
+    void loadJitsiApi(domain)
       .then(() => {
         if (!active || !containerRef.current) return
         if (!window.JitsiMeetExternalAPI) throw new Error('Jitsi could not be initialized.')
-        meetingApi = new window.JitsiMeetExternalAPI(JITSI_DOMAIN, {
-          roomName,
+        meetingApi = new window.JitsiMeetExternalAPI(domain, {
+          roomName: jaas?.roomName || roomName,
+          jwt: jaas?.jwt,
           width: '100%',
           height: '100%',
           parentNode: containerRef.current,
@@ -107,6 +117,7 @@ function JitsiMeetingFrame({
             ],
           },
         })
+        onApiReady?.(meetingApi)
       })
       .catch(() => {
         if (active) onError('Jitsi could not open inside the portal. You can open the meeting in a new tab instead.')
@@ -116,7 +127,7 @@ function JitsiMeetingFrame({
       active = false
       meetingApi?.dispose()
     }
-  }, [displayName, onError, roomName])
+  }, [displayName, jaas, onApiReady, onError, roomName])
 
   return (
     <div
@@ -133,9 +144,12 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [joinUrl, setJoinUrl] = useState<string | null>(null)
+  const [jaas, setJaas] = useState<MeetingReply['jaas']>(null)
+  const meetingApiRef = useRef<JitsiApiInstance | null>(null)
+  const [ending, setEnding] = useState(false)
   const [status, setStatus] = useState('')
   const [embedError, setEmbedError] = useState('')
-  const roomName = jitsiRoomName(joinUrl)
+  const roomName = jaas?.roomName || jitsiRoomName(joinUrl)
   const isJitsi = Boolean(roomName)
   const providerName = isJitsi
     ? 'Jitsi Meet'
@@ -158,6 +172,7 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
           return
         }
         setJoinUrl(result.joinUrl)
+        setJaas(result.jaas ?? null)
       } catch (err) {
         if (active) setError(getErrorMessage(err))
       } finally {
@@ -167,6 +182,20 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
     void prepareMeeting()
     return () => { active = false }
   }, [session.id])
+
+  async function endClass() {
+    if (!window.confirm('End this class for everyone? The session will be marked completed.')) return
+    setEnding(true)
+    try {
+      await api(`/teacher/sessions/${session.id}/end`, { method: 'POST' })
+      meetingApiRef.current?.executeCommand?.('endConference')
+      onClose()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setEnding(false)
+    }
+  }
 
   return (
     <div
@@ -211,7 +240,7 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
                     <a href={joinUrl ?? '#'} target="_blank" rel="noopener noreferrer" className="underline">Open Jitsi in a new tab</a>
                   </p>
                 ) : (
-                  <JitsiMeetingFrame roomName={roomName} displayName={user?.name} onError={setEmbedError} />
+                  <JitsiMeetingFrame roomName={roomName} jaas={jaas} displayName={user?.name} onError={setEmbedError} onApiReady={(api) => { meetingApiRef.current = api }} />
                 )}
                 {!embedError && (
                   <p className="text-xs text-slate-600">
@@ -255,9 +284,19 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
         </div>
 
         {!loading && (
-          <button type="button" onClick={onClose} className="mt-5 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Close
-          </button>
+          <div className="mt-5 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => void endClass()}
+              disabled={ending}
+              className="w-full rounded-lg border border-red-300 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              {ending ? 'Ending class…' : 'End class for everyone'}
+            </button>
+            <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Close
+            </button>
+          </div>
         )}
         {status === 'creating' && !error && !loading && (
           <p className="mt-3 text-center text-xs text-slate-500">Meeting creation is still in progress. Close and reopen this dialog shortly.</p>

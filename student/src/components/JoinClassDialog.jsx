@@ -4,14 +4,14 @@ import { useAuth } from '../context/AuthContext'
 import SharedWhiteboard from './SharedWhiteboard'
 
 const JITSI_DOMAIN = 'meet.jit.si'
-let jitsiApiPromise
+const jitsiApiPromises = new Map()
 
-function loadJitsiApi() {
+function loadJitsiApi(domain = JITSI_DOMAIN) {
   if (typeof window.JitsiMeetExternalAPI === 'function') return Promise.resolve()
-  if (!jitsiApiPromise) {
-    jitsiApiPromise = new Promise((resolve, reject) => {
+  if (!jitsiApiPromises.has(domain)) {
+    const promise = new Promise((resolve, reject) => {
       const script = document.createElement('script')
-      script.src = `https://${JITSI_DOMAIN}/external_api.js`
+      script.src = `https://${domain}/external_api.js`
       script.async = true
       script.onload = resolve
       script.onerror = () => {
@@ -20,11 +20,12 @@ function loadJitsiApi() {
       }
       document.head.appendChild(script)
     }).catch((error) => {
-      jitsiApiPromise = null
+      jitsiApiPromises.delete(domain)
       throw error
     })
+    jitsiApiPromises.set(domain, promise)
   }
-  return jitsiApiPromise
+  return jitsiApiPromises.get(domain)
 }
 
 function getJitsiRoomName(joinUrl) {
@@ -39,20 +40,22 @@ function getJitsiRoomName(joinUrl) {
   }
 }
 
-function JitsiMeeting({ roomName, displayName, onError }) {
+function JitsiMeeting({ roomName, displayName, jaas, onError }) {
   const containerRef = useRef(null)
 
   useEffect(() => {
     let active = true
     let meetingApi = null
-    loadJitsiApi()
+    const domain = jaas?.domain || JITSI_DOMAIN
+    loadJitsiApi(domain)
       .then(() => {
         if (!active || !containerRef.current) return
         if (typeof window.JitsiMeetExternalAPI !== 'function') {
           throw new Error('Jitsi could not be initialized.')
         }
-        meetingApi = new window.JitsiMeetExternalAPI(JITSI_DOMAIN, {
-          roomName,
+        meetingApi = new window.JitsiMeetExternalAPI(domain, {
+          roomName: jaas?.roomName || roomName,
+          jwt: jaas?.jwt,
           width: '100%',
           height: '100%',
           parentNode: containerRef.current,
@@ -83,14 +86,14 @@ function JitsiMeeting({ roomName, displayName, onError }) {
       active = false
       meetingApi?.dispose()
     }
-  }, [displayName, onError, roomName])
+  }, [displayName, jaas, onError, roomName])
 
   return <div ref={containerRef} className="jitsi-meeting-embed" aria-label="Jitsi class meeting" />
 }
 
 export default function JoinClassDialog({ session, onClose }) {
   const { user } = useAuth()
-  const [state, setState] = useState({ loading: true, error: '', joinUrl: '', status: '' })
+  const [state, setState] = useState({ loading: true, error: '', joinUrl: '', status: '', jaas: null })
   const [jitsiError, setJitsiError] = useState('')
 
   useEffect(() => {
@@ -107,7 +110,7 @@ export default function JoinClassDialog({ session, onClose }) {
           })
           return
         }
-        setState({ loading: false, error: '', joinUrl: result.joinUrl, status: result.status || 'ready' })
+        setState({ loading: false, error: '', joinUrl: result.joinUrl, status: result.status || 'ready', jaas: result.jaas || null })
       } catch (error) {
         if (active) setState({ loading: false, error: error.message, status: '' })
       }
@@ -116,7 +119,7 @@ export default function JoinClassDialog({ session, onClose }) {
     return () => { active = false }
   }, [session.session_id])
 
-  const jitsiRoomName = state.joinUrl ? getJitsiRoomName(state.joinUrl) : ''
+  const jitsiRoomName = state.jaas?.roomName || (state.joinUrl ? getJitsiRoomName(state.joinUrl) : '')
   const isJitsi = Boolean(jitsiRoomName)
   const providerName = isJitsi
     ? 'Jitsi Meet'
@@ -173,6 +176,7 @@ export default function JoinClassDialog({ session, onClose }) {
                   ) : (
                     <JitsiMeeting
                       roomName={jitsiRoomName}
+                      jaas={state.jaas}
                       displayName={user?.name}
                       onError={setJitsiError}
                     />

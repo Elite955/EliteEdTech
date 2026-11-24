@@ -488,9 +488,11 @@ teacherRouter.post('/sessions/:id/meeting', requireAuthenticatedUser, requireTea
         : result.status === 'failed' ? 502
           : result.status === 'unavailable' ? 400
             : 200;
+    const joinUrl = result.joinUrl ?? result.session?.meeting_url ?? null;
     return res.status(httpStatus).json({
       status: result.status,
-      joinUrl: result.joinUrl ?? result.session?.meeting_url ?? null,
+      joinUrl,
+      jaas: jaasJoinDetails({ joinUrl, user: req.auth, moderator: true }),
       meetingId: result.meetingId ?? null,
       error: result.error ?? null,
       missingKeys: result.missingKeys ?? [],
@@ -793,6 +795,40 @@ teacherRouter.delete('/sessions/:id/recording', requireAuthenticatedUser, requir
       targetId: req.params.id,
     });
     return res.json({ message: 'Recording removed.' });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Teacher can cancel a scheduled class or terminate an ongoing one.
+teacherRouter.post('/sessions/:id/cancel', requireAuthenticatedUser, requireTeacher, async (req, res, next) => {
+  try {
+    if (!idSchema.safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE class_sessions cs
+       SET status = 'cancelled'
+       FROM bookings b
+       WHERE cs.id = $1 AND cs.booking_id = b.id AND b.teacher_id = $2
+         AND cs.status IN ('scheduled', 'ongoing')
+       RETURNING cs.id`,
+      [req.params.id, req.auth.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Class session not found or already ended.' });
+    await pool.query(
+      `UPDATE bookings SET status = 'cancelled'
+       WHERE id = (SELECT booking_id FROM class_sessions WHERE id = $1)
+         AND status IN ('pending', 'approved')`,
+      [req.params.id],
+    );
+    await writeAudit(req, {
+      actorId: req.auth.id,
+      event: 'class_session_cancelled',
+      module: 'live_classes',
+      targetId: req.params.id,
+    });
+    return res.json({ message: 'Class cancelled.' });
   } catch (error) {
     return next(error);
   }
