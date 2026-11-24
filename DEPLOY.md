@@ -1,5 +1,19 @@
 # Free-tier deployment runbook
 
+## Live environment
+
+| Piece | URL |
+|---|---|
+| API (Render) | https://edtech-api-bvir.onrender.com/api/health |
+| Student portal | https://elite-ed-tech-student.vercel.app |
+| Admin portal | https://elite-ed-tech-admin.vercel.app |
+| Teacher portal | https://elite-ed-tech.vercel.app |
+| Marketing home | https://elite-ed-tech-home.vercel.app |
+| Database | Neon `ep-royal-king-biuzlwcn` (ap-southeast-1) |
+
+All four Vercel projects build from `Elite955/EliteEdTech` → `main`, each with its
+own Root Directory, and proxy `/api` + `/socket.io` to the Render service.
+
 Everything here runs on **$0 fixed cost**:
 
 | Piece | Service | Free limits |
