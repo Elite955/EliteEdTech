@@ -6,7 +6,10 @@ function envValue(key) {
 }
 
 function smtpPassword() {
-  return envValue('SMTP_PASSWORD') || envValue('SMTP_PASS');
+  // Gmail app passwords are displayed in four groups with spaces; the spaces
+  // are not part of the password and break SMTP AUTH if pasted as shown.
+  const value = envValue('SMTP_PASSWORD') || envValue('SMTP_PASS');
+  return value.replace(/\s+/g, '');
 }
 
 function testEnvironment() {
@@ -94,7 +97,10 @@ async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind
     return { recipientId: recipient.id, channel: 'email', status: 'sent' };
   } catch (error) {
     console.error('Booking email delivery failed:', error.message);
-    await record(pool, { recipientId: recipient.id, channel: 'email', subject, body, status: 'failed', bookingId, kind });
+    await record(pool, {
+      recipientId: recipient.id, channel: 'email', subject, body, status: 'failed',
+      providerId: `failed: ${String(error.message).slice(0, 180)}`, bookingId, kind,
+    });
     return { recipientId: recipient.id, channel: 'email', status: 'failed', error: error.message };
   }
 }
