@@ -5,7 +5,8 @@ const JITSI_BASE_URL = 'https://meet.jit.si';
 
 export function jitsiConfigurationStatus(env = process.env) {
   const missingKeys = [];
-  if (!['development', 'test'].includes(env.NODE_ENV)) missingKeys.push('NODE_ENV=development or test');
+  // Public Jitsi rooms need no account or credentials and are safe to use in
+  // production. JITSI_TEST_MODE is the explicit opt-in that enables the feature.
   if (env.JITSI_TEST_MODE !== 'true') missingKeys.push('JITSI_TEST_MODE=true');
   return { configured: missingKeys.length === 0, missingKeys };
 }

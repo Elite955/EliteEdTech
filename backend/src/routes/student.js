@@ -174,7 +174,8 @@ studentRouter.get('/teachers/:id', requireAuthenticatedUser, requireStudent, asy
     const teacher = rows[0];
     if (!teacher) return res.status(404).json({ error: 'Teacher not found.' });
     const { rows: slots } = await pool.query(
-      `SELECT weekday, to_char(start_time, 'HH24:MI') AS start, to_char(end_time, 'HH24:MI') AS "end"
+      `SELECT weekday, to_char(start_time, 'HH24:MI') AS start, to_char(end_time, 'HH24:MI') AS "end",
+              hourly_rate, subject
        FROM teacher_availability WHERE teacher_id = $1 ORDER BY weekday, start_time`,
       [teacher.id],
     );
@@ -184,8 +185,16 @@ studentRouter.get('/teachers/:id', requireAuthenticatedUser, requireStudent, asy
         name: teacher.name,
         subjects: teacher.subjects ?? [],
         bio: teacher.bio,
-        hourly_rate: Number(teacher.hourly_rate),
-        availability: slots.map((slot) => ({ day: WEEKDAYS[slot.weekday], start: slot.start, end: slot.end })),
+        hourly_rate: teacher.hourly_rate == null
+          ? (slots.find((slot) => slot.hourly_rate != null)?.hourly_rate ?? 0)
+          : Number(teacher.hourly_rate),
+        availability: slots.map((slot) => ({
+          day: WEEKDAYS[slot.weekday],
+          start: slot.start,
+          end: slot.end,
+          rate: slot.hourly_rate == null ? null : Number(slot.hourly_rate),
+          subject: slot.subject ?? null,
+        })),
       },
     });
   } catch (error) {
@@ -228,7 +237,7 @@ studentRouter.post('/bookings', requireAuthenticatedUser, requireStudent, async 
     const { rows: teacherRows } = await pool.query(
       `SELECT u.id, u.name, tp.hourly_rate
        FROM users u JOIN teacher_profiles tp ON tp.user_id = u.id
-       WHERE u.id = $1 AND u.role = 'teacher' AND u.status = 'active' AND tp.approved = true AND tp.hourly_rate IS NOT NULL`,
+       WHERE u.id = $1 AND u.role = 'teacher' AND u.status = 'active' AND tp.approved = true`,
       [teacher_id],
     );
     const teacher = teacherRows[0];
@@ -257,7 +266,8 @@ studentRouter.post('/bookings', requireAuthenticatedUser, requireStudent, async 
     const { rows: slotRows } = await pool.query(
       `SELECT hourly_rate FROM teacher_availability
        WHERE teacher_id = $1 AND weekday = $2
-         AND start_time = $3::time AND end_time = $4::time
+         AND $3::time >= start_time AND $4::time <= end_time
+       ORDER BY start_time
        LIMIT 1`,
       [teacher_id, weekday, start_time, end_time],
     );

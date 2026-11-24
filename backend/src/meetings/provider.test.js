@@ -12,12 +12,12 @@ const jitsiEnv = {
   JITSI_TEST_MODE: 'true',
 };
 
-test('Jitsi is selected explicitly and is limited to enabled development/test mode', () => {
+test('Jitsi requires an explicit opt-in and works in production', () => {
   assert.equal(selectedMeetingProviderId({}), 'google_meet');
   assert.equal(meetingProviderConfigurationStatus({ env: jitsiEnv }).configured, true);
   assert.equal(
     meetingProviderConfigurationStatus({ env: { ...jitsiEnv, NODE_ENV: 'production' } }).configured,
-    false,
+    true,
   );
   assert.equal(
     meetingProviderConfigurationStatus({ env: { ...jitsiEnv, JITSI_TEST_MODE: 'false' } }).configured,

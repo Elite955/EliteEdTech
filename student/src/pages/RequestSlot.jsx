@@ -65,16 +65,6 @@ export default function RequestSlot() {
     () => (teacher?.availability || []).filter((a) => weekdayIndex(a.day) === weekday),
     [teacher, weekday]
   )
-  const starts = useMemo(() => {
-    const out = []
-    for (const a of dayWindows) {
-      for (let t = toMinutes(a.start); t + 30 <= toMinutes(a.end); t += 30) {
-        out.push({ window: a, value: fmt(t) })
-      }
-    }
-    return out
-  }, [dayWindows])
-
   const availableDates = useMemo(() => {
     if (!teacher?.availability?.length) return []
     const days = new Set(teacher.availability.map((a) => weekdayIndex(a.day)))
@@ -88,26 +78,35 @@ export default function RequestSlot() {
     return out
   }, [teacher])
 
-  const chosenWindow = starts.find((s) => s.value === start)?.window
-  const durations = useMemo(() => {
-    if (!start || !chosenWindow) return []
-    const room = toMinutes(chosenWindow.end) - toMinutes(start)
-    return [30, 60, 90, 120].filter((d) => d <= room)
-  }, [start, chosenWindow])
+  const chosenWindow = dayWindows.find((a) =>
+    start && toMinutes(start) >= toMinutes(a.start) && toMinutes(start) < toMinutes(a.end))
+  const maxMinutes = chosenWindow ? toMinutes(chosenWindow.end) - toMinutes(start) : 0
+  const timeBounds = dayWindows.length
+    ? {
+        min: dayWindows.map((a) => a.start).sort()[0],
+        max: dayWindows.map((a) => a.end).sort().at(-1),
+      }
+    : null
 
   useEffect(() => {
-    if (start && durations.length && !durations.includes(duration)) {
-      setDuration(durations.includes(60) ? 60 : durations[0])
+    if (start && maxMinutes > 0 && (duration < 15 || duration > maxMinutes)) {
+      setDuration(Math.min(60, maxMinutes))
     }
-  }, [durations, duration, start])
+  }, [start, maxMinutes, duration])
 
   const hours = duration / 60
-  const slot = start && duration ? { start, end: fmt(toMinutes(start) + duration) } : null
+  const slot = start && duration > 0 && chosenWindow && duration <= maxMinutes
+    ? { start, end: fmt(toMinutes(start) + duration) }
+    : null
+  const displayRate = chosenWindow?.rate ?? teacher?.hourly_rate ?? 0
   const today = new Date().toISOString().slice(0, 10)
 
   async function submit(e) {
     e.preventDefault()
-    if (!slot) return
+    if (!slot) {
+      setErr('Choose a start time and a class length inside the teacher’s window.')
+      return
+    }
     setBusy(true)
     setErr('')
     try {
@@ -148,7 +147,7 @@ export default function RequestSlot() {
       <h1>Request a slot</h1>
       <p className="page-sub">
         {teacher
-          ? `With ${teacher.name} — ₹${teacher.hourly_rate}/hour. The platform computes the final amount from the teacher's rate; it is confirmed on approval.`
+          ? `With ${teacher.name} — ₹${displayRate}/hour for this slot. The platform computes the final amount from the teacher’s rate; it is confirmed on approval.`
           : 'Loading teacher…'}
       </p>
 
@@ -208,51 +207,54 @@ export default function RequestSlot() {
           <p className="muted">The teacher has no availability on this weekday. Try another date.</p>
         )}
 
-        {date && starts.length > 0 && (
+        {date && dayWindows.length > 0 && (
           <>
             <div className="field">
               <label htmlFor="start">Start time ({WEEKDAYS_SHORT[weekday]}{date ? `, ${fromDateInput(date)?.getDate()} ${new Intl.DateTimeFormat("en-IN", { month: "short" }).format(fromDateInput(date))}` : ""})</label>
-              <select
+              <input
                 id="start"
+                type="time"
                 required
                 value={start}
+                min={timeBounds?.min}
+                max={timeBounds?.max}
+                step={60}
                 onChange={(e) => {
                   setStart(e.target.value)
                   setDuration(0)
                 }}
-              >
-                <option value="">Choose a start time…</option>
-                {starts.map((s, i) => (
-                  <option key={i} value={s.value}>
-                    {s.value} — window {s.window.start}–{s.window.end}
-                  </option>
-                ))}
-              </select>
+              />
+              <p className="muted" style={{ marginTop: 6 }}>
+                Teacher’s window: {dayWindows.map((w) => `${w.start}–${w.end}`).join(', ')}
+                {chosenWindow?.subject ? ` · ${chosenWindow.subject}` : ''}
+              </p>
             </div>
 
-            {start && (
-              <div className="field">
-                <label htmlFor="duration">Session length</label>
-                <select
-                  id="duration"
-                  required
-                  value={duration || ''}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                >
-                  <option value="">Choose a length…</option>
-                  {durations.map((d) => (
-                    <option key={d} value={d}>{d} minutes</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className="field">
+              <label htmlFor="duration">Class length (minutes)</label>
+              <input
+                id="duration"
+                type="number"
+                required
+                min={15}
+                max={maxMinutes || undefined}
+                step={1}
+                value={duration || ''}
+                placeholder={maxMinutes ? `Up to ${maxMinutes} minutes` : 'Choose a start time first'}
+                disabled={!start}
+                onChange={(e) => setDuration(Number(e.target.value))}
+              />
+              <p className="muted" style={{ marginTop: 6 }}>
+                Pick any length up to {maxMinutes || 'the end of the window'} minutes.
+              </p>
+            </div>
           </>
         )}
 
         {slot && (
           <p className="muted" style={{ marginBottom: 10 }}>
             Selected: {WEEKDAYS_SHORT[weekday]} {slot.start}–{slot.end} ({hours} hour{hours === 1 ? '' : 's'}) —
-            estimated ₹{((hours * (teacher?.hourly_rate || 0)) * 100 / 100).toFixed(2)}
+            estimated ₹{(hours * Number(displayRate || 0)).toFixed(2)}
           </p>
         )}
 
