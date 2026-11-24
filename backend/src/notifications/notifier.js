@@ -12,6 +12,53 @@ function smtpPassword() {
   return value.replace(/\s+/g, '');
 }
 
+function emailApiKey() {
+  return envValue('BREVO_API_KEY');
+}
+
+function emailApiConfigured() {
+  return Boolean(emailApiKey() && envValue('SMTP_FROM'));
+}
+
+function senderDetails() {
+  const from = envValue('SMTP_FROM') || 'ELITE <noreply@example.com>';
+  const match = from.match(/^(.*?)<([^>]+)>$/);
+  if (!match) return { name: 'ELITE', email: from };
+  return { name: match[1].trim() || 'ELITE', email: match[2].trim() };
+}
+
+// Render's free tier blocks outbound SMTP ports. Brevo's HTTPS API uses port
+// 443, which hosting providers do not block, and has a free 300/day plan.
+async function sendEmailViaApi(pool, recipient, { subject, body, html, attachments = [], bookingId, kind }) {
+  const sender = senderDetails();
+  const payload = {
+    sender,
+    to: [{ email: recipient.email, name: recipient.name ?? '' }],
+    subject,
+    textContent: body,
+    htmlContent: html || `<p>${String(body).replaceAll('<', '&lt;')}</p>`,
+  };
+  if (attachments.length) {
+    payload.attachment = attachments.map((item) => ({
+      name: item.filename,
+      content: Buffer.from(item.content).toString('base64'),
+    }));
+  }
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': emailApiKey(), 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(20000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || `Brevo responded ${response.status}`);
+  await record(pool, {
+    recipientId: recipient.id, channel: 'email', subject, body, status: 'sent',
+    providerId: String(data.messageId ?? ''), bookingId, kind,
+  });
+  return { recipientId: recipient.id, channel: 'email', status: 'sent', providerId: String(data.messageId ?? '') };
+}
+
 function testEnvironment() {
   return ['development', 'test'].includes(process.env.NODE_ENV);
 }
@@ -25,10 +72,12 @@ function emailTestRecipients() {
 
 export function notificationConfiguration() {
   const emailMissing = [];
-  if (!envValue('SMTP_HOST')) emailMissing.push('SMTP_HOST');
-  if (!envValue('SMTP_USER')) emailMissing.push('SMTP_USER');
-  if (!smtpPassword()) emailMissing.push('SMTP_PASSWORD or SMTP_PASS');
-  if (!envValue('SMTP_FROM')) emailMissing.push('SMTP_FROM');
+  if (!emailApiConfigured()) {
+    if (!envValue('SMTP_HOST')) emailMissing.push('SMTP_HOST');
+    if (!envValue('SMTP_USER')) emailMissing.push('SMTP_USER');
+    if (!smtpPassword()) emailMissing.push('SMTP_PASSWORD or SMTP_PASS');
+    if (!envValue('SMTP_FROM')) emailMissing.push('SMTP_FROM');
+  }
   if (testEnvironment() && !emailTestRecipients().length) emailMissing.push('BOOKING_EMAIL_TEST_RECIPIENTS');
 
   return {
@@ -56,9 +105,9 @@ async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind
   if (!smtpConfigured()) {
     await record(pool, {
       recipientId: recipient.id, channel: 'email', subject, body, status: 'skipped',
-      providerId: 'skipped: SMTP is not configured.', bookingId, kind,
+      providerId: 'skipped: email is not configured.', bookingId, kind,
     });
-    return { recipientId: recipient.id, channel: 'email', status: 'skipped', error: 'SMTP is not configured.' };
+    return { recipientId: recipient.id, channel: 'email', status: 'skipped', error: 'Email is not configured.' };
   }
   if (!recipient.email) {
     await record(pool, { recipientId: recipient.id, channel: 'email', subject, body, status: 'failed', bookingId, kind });
@@ -73,6 +122,9 @@ async function sendEmail(pool, recipient, { subject, body, html, bookingId, kind
   }
   const port = Number(envValue('SMTP_PORT') || 587);
   try {
+    if (emailApiConfigured()) {
+      return await sendEmailViaApi(pool, recipient, { subject, body, html, attachments, bookingId, kind });
+    }
     const transport = nodemailer.createTransport({
       host: envValue('SMTP_HOST'),
       port,

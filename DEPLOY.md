@@ -157,23 +157,32 @@ a short-lived `/api/auth/socket-token` token.
 Then go back to Render and set the four `*_ORIGIN` variables to the Vercel
 production domains, and redeploy the API.
 
-## 5. Gmail SMTP (free email)
+## 5. Email — use Brevo HTTPS API (free)
 
-1. Google Account → Security → enable **2-Step Verification**
-2. Security → **App passwords** → app "Mail" → copy the 16-character value
-3. Set on Render:
+**Gmail SMTP does not work on Render's free tier.** Since 26 Sep 2025 Render
+blocks all outbound SMTP ports (`25`, `465`, `587`); a Gmail app password is
+correct but the connection simply times out. Use an HTTPS email API instead —
+port `443` is never blocked. Brevo's free plan includes 300 emails/day.
+
+1. Sign up 👉 https://www.brevo.com and verify the sender address you will use
+   (your project Gmail is fine; no custom domain needed)
+2. Open 👉 https://app.brevo.com/settings/keys/api → **Generate a new API key**
+3. On Render set:
 
 ```
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=youraddress@gmail.com
-SMTP_PASSWORD=<16-char app password>
-SMTP_FROM=ELITE <youraddress@gmail.com>
+BREVO_API_KEY = <the Brevo API key>
+SMTP_FROM     = ELITE <your-verified-sender@example.com>
 ```
 
-Limits: 500 recipients/day, From must be that Gmail. When volume grows, switch
-to a free transactional provider (Brevo ~300/day, Resend ~100/day) — same SMTP
-variables, different host.
+`SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` are ignored when
+`BREVO_API_KEY` is present. They remain for local development, where SMTP
+usually works. If Brevo is absent, the app falls back to Nodemailer SMTP.
+
+The API path sends the same content as SMTP, including PDF attachments (the
+welcome summary and payment receipts). Delivery results are written to the
+notification centre; a failure records the reason in `provider_id`.
+
+## 6. Razorpay webhook + go-live
 
 ## 6. Razorpay webhook + go-live
 
