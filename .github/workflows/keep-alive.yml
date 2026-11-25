@@ -1,0 +1,21 @@
+name: Keep API awake
+
+# Render's free tier suspends a service after ~15 minutes idle. The first
+# request after that can exceed Vercel's proxy timeout and return 502.
+# A free GitHub Actions schedule pings the health endpoint every 10 minutes.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render API
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 https://edtech-api-bvir.onrender.com/api/health || true)
+          echo "health status: $code"
+          if [ "$code" != "200" ]; then
+            echo "::warning::API health check returned $code"
+          fi

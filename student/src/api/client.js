@@ -14,20 +14,32 @@ export class ApiError extends Error {
   }
 }
 
+const RETRY_DELAYS = [800, 1800, 3500]
+
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', 'X-Portal': 'student', ...(options.headers || {}) }
   let res
+  let text = ''
   try {
-    res = await fetch(apiUrl(path), { ...options, headers, credentials: 'include' })
+    for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt += 1) {
+      res = await fetch(apiUrl(path), { ...options, headers, credentials: 'include' })
+      text = await res.text()
+      // Render's free tier sleeps; the first request can time out in Vercel's
+      // proxy and return a non-JSON 502/503. Retry while it wakes up.
+      const proxyTimeout = [502, 503, 504].includes(res.status) && !text.trim().startsWith('{')
+      if (!proxyTimeout || attempt === RETRY_DELAYS.length) break
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[attempt]))
+    }
   } catch {
-    throw new ApiError(0, 'Cannot reach the server. Run start-dev.cmd from the project root, then try again.')
+    throw new ApiError(0, 'Cannot reach the server. Please check your connection and try again.')
   }
   let body = null
-  try {
-    body = await res.json()
-  } catch {}
+  try { body = JSON.parse(text || 'null') } catch {}
   if (!res.ok) {
-    throw new ApiError(res.status, body?.error || `Request failed (${res.status})`)
+    const message = body?.error || ([502, 503, 504].includes(res.status)
+      ? 'The server is waking up. Please try again in a few seconds.'
+      : `Request failed (${res.status})`)
+    throw new ApiError(res.status, message)
   }
   return body
 }
