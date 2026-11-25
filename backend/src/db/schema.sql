@@ -248,7 +248,7 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_channel_check
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_kind_check;
 ALTER TABLE notifications
   ADD CONSTRAINT notifications_kind_check
-  CHECK (kind IN ('booking_confirmation', 'join_details', 'general'));
+  CHECK (kind IN ('booking_confirmation', 'booking_request', 'booking_approved', 'booking_rejected', 'join_details', 'general'));
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_status_check;
 ALTER TABLE notifications
   ADD CONSTRAINT notifications_status_check

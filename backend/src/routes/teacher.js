@@ -5,6 +5,7 @@ import { requireAuthenticatedUser } from '../security/authMiddleware.js';
 import { writeAudit } from '../security/audit.js';
 import { ensureSessionMeeting } from '../meetings/service.js';
 import { selectedMeetingProviderId } from '../meetings/provider.js';
+import { jaasJoinDetails } from '../integrations/jaas.js';
 import { sendBookingDetails } from '../notifications/notifier.js';
 
 export const teacherRouter = Router();
