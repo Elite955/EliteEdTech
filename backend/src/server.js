@@ -17,6 +17,7 @@ import { registerWhiteboardHandlers } from './realtime/whiteboard.js';
 import { razorpayConfigured } from './payments/razorpay.js';
 import { notificationConfiguration } from './notifications/notifier.js';
 import { selectedMeetingProviderId } from './meetings/provider.js';
+import { jaasConfigured } from './integrations/jaas.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must be set to a random value of at least 32 characters.');
@@ -57,7 +58,7 @@ app.get('/api/integrations/status', (_req, res) => {
       testMode: process.env.RAZORPAY_TEST_MODE !== 'false',
       webhook: Boolean(process.env.RAZORPAY_WEBHOOK_SECRET),
     },
-    meetings: { provider: selectedMeetingProviderId() },
+    meetings: { provider: selectedMeetingProviderId(), jaas: jaasConfigured() },
     email: { configured: notifications.email.configured, missingKeys: notifications.email.missingKeys, provider: notifications.email.provider },
   });
 });
