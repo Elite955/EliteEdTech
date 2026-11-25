@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import express from 'express';
 import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { requireAuthenticatedUser } from '../security/authMiddleware.js';
@@ -855,4 +856,67 @@ teacherRouter.post('/sessions/:id/cancel', requireAuthenticatedUser, requireTeac
   } catch (error) {
     return next(error);
   }
+});
+
+
+const MAX_RECORDING_BYTES = 26_214_400;
+
+teacherRouter.post('/sessions/:id/recording/file', requireAuthenticatedUser, requireTeacher, express.json({ limit: '40mb' }), async (req, res, next) => {
+  try {
+    if (!idSchema.safeParse(req.params.id).success) return res.status(404).json({ error: 'Class session not found.' });
+    const input = z.object({
+      data: z.string().min(1),
+      filename: z.string().trim().min(1).max(120).optional(),
+      mimeType: z.string().trim().min(1).max(80).optional(),
+    }).safeParse(req.body ?? {});
+    if (!input.success) return validationError(res, input.error);
+
+    const buffer = Buffer.from(input.data.data, 'base64');
+    if (!buffer.length || buffer.length > MAX_RECORDING_BYTES) {
+      return res.status(413).json({ error: 'Recording must be between 1 byte and 25 MB. Keep classes short or use a lower resolution.' });
+    }
+    const { rows } = await pool.query(
+      `SELECT cs.id FROM class_sessions cs JOIN bookings b ON b.id = cs.booking_id
+       WHERE cs.id = $1 AND b.teacher_id = $2`,
+      [req.params.id, req.auth.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Class session not found.' });
+
+    const filename = (input.data.filename ?? 'class-recording.webm').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const mimeType = input.data.mimeType ?? 'video/webm';
+    await pool.query(
+      `INSERT INTO class_recordings (session_id, teacher_id, filename, mime_type, size_bytes, content)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (session_id) DO UPDATE SET filename = EXCLUDED.filename,
+         mime_type = EXCLUDED.mime_type, size_bytes = EXCLUDED.size_bytes,
+         content = EXCLUDED.content, created_at = now()`,
+      [req.params.id, req.auth.id, filename, mimeType, buffer.length, buffer],
+    );
+    const url = `/api/sessions/${req.params.id}/recording/file`;
+    await pool.query(
+      `UPDATE class_sessions SET recording_url = $2, recording_consent = true WHERE id = $1`,
+      [req.params.id, url],
+    );
+    await writeAudit(req, {
+      actorId: req.auth.id, event: 'recording_uploaded', module: 'live_classes',
+      targetId: req.params.id, details: { bytes: buffer.length },
+    });
+    return res.status(201).json({ url, sizeBytes: buffer.length, filename });
+  } catch (error) { return next(error); }
+});
+
+teacherRouter.get('/sessions/:id/recording/file', requireAuthenticatedUser, requireTeacher, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT r.content, r.mime_type, r.filename
+       FROM class_recordings r JOIN bookings b ON b.id = (SELECT booking_id FROM class_sessions WHERE id = r.session_id)
+       WHERE r.session_id = $1 AND r.teacher_id = $2`,
+      [req.params.id, req.auth.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Recording not found.' });
+    const row = rows[0];
+    res.set('Content-Type', row.mime_type);
+    res.set('Content-Disposition', `inline; filename="${String(row.filename).replace(/[^a-zA-Z0-9._-]/g, '_')}"`);
+    return res.send(row.content);
+  } catch (error) { return next(error); }
 });

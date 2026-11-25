@@ -323,6 +323,23 @@ Razorpay order.
 If Razorpay's webhook confirms a payment before the browser does, `/verify`
 returns `{"status":"paid","alreadyConfirmed":true}` instead of an error.
 
+## 6c. Class recording (free, stored in Neon)
+
+Teacher → Conduct Class → **Recording Consent** panel → **Start recording**.
+The browser captures the shared screen (choose the board tab) and microphone
+with `MediaRecorder`, and **Stop & upload** sends the WebM straight to the API.
+The file is stored in the `class_recordings` table in Neon — no external storage,
+no third-party account, no per-minute fee.
+
+- Maximum **25 MB per recording** (base64 JSON body limit is 40 MB).
+- `class_sessions.recording_url` is set to `/api/sessions/:id/recording/file`,
+  so the existing "View Recording" link works for both teacher and student
+  through Vercel's `/api` rewrite.
+- Students can only download recordings for **paid/completed** bookings.
+- Neon's free tier has 0.5 GB total, so roughly 20 full 25 MB recordings fit.
+  Delete old sessions from Admin → Live classes to reclaim space.
+- Get written parental consent before recording minors (DPDP Act).
+
 ## Troubleshooting
 
 | Symptom | Cause |

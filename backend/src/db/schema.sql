@@ -383,3 +383,17 @@ DROP TRIGGER IF EXISTS audit_logs_immutable ON audit_logs;
 CREATE TRIGGER audit_logs_immutable
   BEFORE UPDATE OR DELETE ON audit_logs
   FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation();
+
+-- Browser-recorded classes are stored directly in Neon. A 25 MB per-recording
+-- cap keeps the free 0.5 GB database quota safe.
+CREATE TABLE IF NOT EXISTS class_recordings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL UNIQUE REFERENCES class_sessions(id) ON DELETE CASCADE,
+  teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 26214400),
+  content BYTEA NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS class_recordings_teacher_idx ON class_recordings(teacher_id);

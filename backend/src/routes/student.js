@@ -657,6 +657,33 @@ studentRouter.get('/payments/:id/receipt', requireAuthenticatedUser, requireStud
   }
 });
 
+studentRouter.get('/sessions/:id/recording/file', requireAuthenticatedUser, async (req, res, next) => {
+  try {
+    const allowed = req.auth.session_type === 'admin';
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Recording not found.' });
+    }
+    const { rows } = await pool.query(
+      `SELECT r.content, r.mime_type, r.filename, b.student_id, b.teacher_id, b.status AS booking_status
+       FROM class_recordings r
+       JOIN class_sessions cs ON cs.id = r.session_id
+       JOIN bookings b ON b.id = cs.booking_id
+       WHERE r.session_id = $1`,
+      [req.params.id],
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Recording not found.' });
+    const participant = req.auth.id === row.student_id || req.auth.id === row.teacher_id;
+    const paid = ['paid', 'completed'].includes(row.booking_status);
+    if (!allowed && (!participant || !paid)) {
+      return res.status(403).json({ error: 'This recording is not available to your account.' });
+    }
+    res.set('Content-Type', row.mime_type);
+    res.set('Content-Disposition', `inline; filename="${String(row.filename).replace(/[^a-zA-Z0-9._-]/g, '_')}"`);
+    return res.send(row.content);
+  } catch (error) { return next(error); }
+});
+
 studentRouter.get('/sessions/mine', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
   try {
     const { rows } = await pool.query(

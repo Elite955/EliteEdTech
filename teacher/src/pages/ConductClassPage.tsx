@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -24,6 +24,13 @@ export function ConductClassPage() {
   const [joining, setJoining] = useState(false)
   const [recordingUrl, setRecordingUrl] = useState('')
   const [savingRecording, setSavingRecording] = useState(false)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+  const [recording, setRecording] = useState(false)
+  const [uploadingRecording, setUploadingRecording] = useState(false)
+  const [recordSeconds, setRecordSeconds] = useState(0)
+  const timerRef = useRef<number | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +88,80 @@ export function ConductClassPage() {
       setError(getErrorMessage(err))
     } finally {
       setActing(false)
+    }
+  }
+
+  const stopRecording = () => {
+    const recorder = recorderRef.current
+    if (recorder && recorder.state !== 'inactive') recorder.stop()
+  }
+
+  const uploadRecording = async () => {
+    const blob = new Blob(chunksRef.current, { type: recorderRef.current?.mimeType || 'video/webm' })
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    recorderRef.current = null
+    if (timerRef.current) window.clearInterval(timerRef.current)
+    timerRef.current = null
+    setRecording(false)
+    if (!blob.size) return
+    if (blob.size > 25 * 1024 * 1024) {
+      setError('The recording is larger than 25 MB and was not uploaded. Try a shorter class or lower resolution.')
+      return
+    }
+    setUploadingRecording(true)
+    setError('')
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
+        reader.onerror = () => reject(new Error('Could not read the recording.'))
+        reader.readAsDataURL(blob)
+      })
+      const result = await api<{ url: string; sizeBytes: number }>(`/teacher/sessions/${sessionId}/recording/file`, {
+        method: 'POST',
+        body: JSON.stringify({
+          data,
+          filename: `class-${sessionId}.webm`,
+          mimeType: blob.type || 'video/webm',
+        }),
+      })
+      setRecordingUrl(result.url)
+      await load()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setUploadingRecording(false)
+    }
+  }
+
+  const startRecording = async () => {
+    setError('')
+    try {
+      const display = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false })
+      let microphone: MediaStream | null = null
+      try {
+        microphone = await navigator.mediaDevices.getUserMedia({ audio: true })
+      } catch {
+        // Video-only recording is still useful if microphone access is denied.
+      }
+      const tracks = [...display.getVideoTracks(), ...(microphone?.getAudioTracks() ?? [])]
+      const stream = new MediaStream(tracks)
+      streamRef.current = stream
+      const preferred = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+      const mimeType = preferred.find((type) => MediaRecorder.isTypeSupported(type)) ?? ''
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {})
+      chunksRef.current = []
+      recorder.ondataavailable = (event) => { if (event.data.size) chunksRef.current.push(event.data) }
+      recorder.onstop = () => { void uploadRecording() }
+      recorder.start(1000)
+      recorderRef.current = recorder
+      setRecording(true)
+      setRecordSeconds(0)
+      timerRef.current = window.setInterval(() => setRecordSeconds((value) => value + 1), 1000)
+      display.getVideoTracks()[0]?.addEventListener('ended', () => stopRecording(), { once: true })
+    } catch (err) {
+      setError(err instanceof Error ? `Screen recording could not start: ${err.message}` : 'Screen recording could not start.')
     }
   }
 
@@ -299,6 +380,32 @@ export function ConductClassPage() {
           {!session.recording_consent && (
             <p className="mt-2 text-xs text-slate-500">Enable consent before saving a recording link.</p>
           )}
+          <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <h4 className="text-sm font-semibold text-slate-900">Record this class</h4>
+            <p className="mt-1 text-xs text-slate-500">
+              Records your shared screen (pick the board tab) and microphone, then stores the file in Neon automatically. Maximum 25 MB.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {!recording ? (
+                <button
+                  type="button"
+                  onClick={() => void startRecording()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                >
+                  <span className="h-2 w-2 rounded-full bg-white" /> Start recording
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                >
+                  <Square size={14} /> Stop & upload ({Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, '0')})
+                </button>
+              )}
+              {uploadingRecording && <span className="text-xs text-blue-600">Uploading to the database…</span>}
+            </div>
+          </div>
         </div>
 
         {/* Attendance */}
