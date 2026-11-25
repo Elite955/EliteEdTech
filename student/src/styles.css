@@ -3463,3 +3463,221 @@ a.btn:hover {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+.class-resources-dialog {
+  max-width: 620px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+.class-resources {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-in);
+  background: var(--paper);
+}
+
+.class-resources-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.class-resources-head strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.class-resources-head span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.class-resources-tabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--paper-2);
+}
+
+.class-resources-tabs button {
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.class-resources-tabs button.is-active {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
+.class-resources-error {
+  margin-top: 8px;
+  border-radius: 7px;
+  padding: 6px 8px;
+  background: color-mix(in oklch, var(--bad) 10%, var(--paper));
+  color: var(--bad);
+  font-size: 0.78rem;
+}
+
+.class-resources-list {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.class-resources-empty {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.class-resources-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-2);
+}
+
+.class-resources-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.85rem;
+}
+
+.class-resources-item div {
+  min-width: 0;
+  flex: 1;
+}
+
+.class-resources-item strong,
+.class-resources-item span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.class-resources-item strong {
+  font-size: 0.82rem;
+}
+
+.class-resources-item span {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.class-resources-action {
+  flex: none;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  padding: 4px 9px;
+  color: var(--accent-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.class-resources-action:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.class-resources-chat {
+  margin-top: 9px;
+}
+
+.class-resources-status {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.class-resources-messages {
+  display: grid;
+  gap: 5px;
+  max-height: 200px;
+  margin-top: 6px;
+  padding: 8px;
+  overflow-y: auto;
+  border-radius: 8px;
+  background: var(--paper-2);
+}
+
+.class-resources-message {
+  max-width: 85%;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--paper);
+}
+
+.class-resources-message.is-mine {
+  margin-left: auto;
+  background: var(--accent);
+  color: #fff;
+}
+
+.class-resources-message span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.class-resources-message.is-mine span {
+  color: color-mix(in oklch, #fff 75%, transparent);
+}
+
+.class-resources-message p {
+  margin: 1px 0 0;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.class-resources-compose {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.class-resources-compose input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.class-resources-compose input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}

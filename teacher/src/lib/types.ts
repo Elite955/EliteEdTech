@@ -52,7 +52,10 @@ export interface ClassSession {
   recording_url: string | null
   recording_consent: boolean
   created_at: string
+  student_id?: string
   student_name?: string
+  booking_status?: 'pending' | 'approved' | 'rejected' | 'paid' | 'completed' | 'cancelled'
+  canJoin?: boolean
   starts_at?: string
   ends_at?: string
 }

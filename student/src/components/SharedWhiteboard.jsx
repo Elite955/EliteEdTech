@@ -1,18 +1,64 @@
 import { useEffect, useRef, useState } from 'react'
 import { connectSocket } from '../api/socket'
 
+const NOTE_WIDTH = 0.22
+const NOTE_HEIGHT = 0.14
+
+function drawNote(context, stroke, width, height) {
+  const point = stroke.points[0]
+  if (!point) return
+  const x = point.x * width
+  const y = point.y * height
+  const noteWidth = NOTE_WIDTH * width
+  const noteHeight = NOTE_HEIGHT * height
+  context.save()
+  context.fillStyle = '#fef3c7'
+  context.strokeStyle = '#f59e0b'
+  context.lineWidth = 1.5
+  context.beginPath()
+  context.roundRect(x, y, noteWidth, noteHeight, 8)
+  context.fill()
+  context.stroke()
+  context.fillStyle = '#78350f'
+  context.font = '12px system-ui, sans-serif'
+  context.textBaseline = 'top'
+  const words = (stroke.text || '').split(/\s+/).filter(Boolean)
+  const lines = []
+  let line = ''
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word
+    if (context.measureText(candidate).width > noteWidth - 16 && line) {
+      lines.push(line)
+      line = word
+    } else {
+      line = candidate
+    }
+    if (lines.length >= 5) break
+  }
+  if (line && lines.length < 5) lines.push(line)
+  lines.slice(0, 5).forEach((item, index) => {
+    context.fillText(item, x + 8, y + 8 + index * 15, noteWidth - 16)
+  })
+  context.restore()
+}
+
 function drawStrokes(canvas, strokes) {
-  const bounds = canvas.getBoundingClientRect()
-  if (!bounds.width || !bounds.height) return
+  const width = canvas.clientWidth
+  const height = canvas.clientHeight
+  if (!width || !height) return
   const scale = Math.min(window.devicePixelRatio || 1, 2)
-  canvas.width = Math.round(bounds.width * scale)
-  canvas.height = Math.round(bounds.height * scale)
+  canvas.width = Math.round(width * scale)
+  canvas.height = Math.round(height * scale)
   const context = canvas.getContext('2d')
   if (!context) return
   context.setTransform(scale, 0, 0, scale, 0, 0)
-  context.clearRect(0, 0, bounds.width, bounds.height)
+  context.clearRect(0, 0, width, height)
 
   for (const stroke of strokes) {
+    if (stroke.tool === 'note') {
+      drawNote(context, stroke, width, height)
+      continue
+    }
     const points = stroke.points
     if (!points.length) continue
     context.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
@@ -21,16 +67,45 @@ function drawStrokes(canvas, strokes) {
     context.lineWidth = stroke.width
     context.strokeStyle = stroke.color
     context.fillStyle = stroke.color
+
+    if (stroke.tool === 'rectangle' && points.length >= 2) {
+      const first = points[0]
+      const last = points[points.length - 1]
+      context.strokeRect(
+        first.x * width,
+        first.y * height,
+        (last.x - first.x) * width,
+        (last.y - first.y) * height,
+      )
+      continue
+    }
+    if (stroke.tool === 'ellipse' && points.length >= 2) {
+      const first = points[0]
+      const last = points[points.length - 1]
+      context.beginPath()
+      context.ellipse(
+        ((first.x + last.x) / 2) * width,
+        ((first.y + last.y) / 2) * height,
+        Math.abs((last.x - first.x) * width) / 2,
+        Math.abs((last.y - first.y) * height) / 2,
+        0,
+        0,
+        Math.PI * 2,
+      )
+      context.stroke()
+      continue
+    }
+
     if (points.length === 1) {
       context.beginPath()
-      context.arc(points[0].x * bounds.width, points[0].y * bounds.height, stroke.width / 2, 0, Math.PI * 2)
+      context.arc(points[0].x * width, points[0].y * height, stroke.width / 2, 0, Math.PI * 2)
       context.fill()
       continue
     }
     context.beginPath()
-    context.moveTo(points[0].x * bounds.width, points[0].y * bounds.height)
+    context.moveTo(points[0].x * width, points[0].y * height)
     for (let index = 1; index < points.length; index += 1) {
-      context.lineTo(points[index].x * bounds.width, points[index].y * bounds.height)
+      context.lineTo(points[index].x * width, points[index].y * height)
     }
     context.stroke()
   }
@@ -63,7 +138,7 @@ export default function SharedWhiteboard({ sessionId }) {
     }
     function onDisconnect() {
       setConnected(false)
-      setError('Connection lost. Reconnecting to the shared board…')
+      setError('Connection lost. Reconnecting to the shared board...')
     }
     function onStrokeStart(stroke) {
       setStrokes((current) => current.some((item) => item.id === stroke.id) ? current : [...current, stroke])
@@ -72,6 +147,12 @@ export default function SharedWhiteboard({ sessionId }) {
       setStrokes((current) => current.map((stroke) => (
         stroke.id === strokeId ? { ...stroke, points: [...stroke.points, ...points] } : stroke
       )))
+    }
+    function onRemove({ strokeId }) {
+      setStrokes((current) => current.filter((stroke) => stroke.id !== strokeId))
+    }
+    function onReplace(payload) {
+      setStrokes(payload?.strokes || [])
     }
     function onClear() {
       setStrokes([])
@@ -85,6 +166,8 @@ export default function SharedWhiteboard({ sessionId }) {
     socket.on('connect_error', onDisconnect)
     socket.on('whiteboard:stroke:start', onStrokeStart)
     socket.on('whiteboard:stroke:points', onStrokePoints)
+    socket.on('whiteboard:remove', onRemove)
+    socket.on('whiteboard:replace', onReplace)
     socket.on('whiteboard:clear', onClear)
     socket.on('whiteboard:error', onBoardError)
     if (socket.connected) joinBoard()
@@ -97,6 +180,8 @@ export default function SharedWhiteboard({ sessionId }) {
       socket.off('connect_error', onDisconnect)
       socket.off('whiteboard:stroke:start', onStrokeStart)
       socket.off('whiteboard:stroke:points', onStrokePoints)
+      socket.off('whiteboard:remove', onRemove)
+      socket.off('whiteboard:replace', onReplace)
       socket.off('whiteboard:clear', onClear)
       socket.off('whiteboard:error', onBoardError)
     }
@@ -122,16 +207,16 @@ export default function SharedWhiteboard({ sessionId }) {
         <div>
           <strong>miro</strong>
           <span className={`whiteboard-connection${connected ? ' is-connected' : ''}`}>
-            {connected ? '24h left · Live board' : 'Connecting…'}
+            {connected ? 'Live board' : 'Connecting...'}
           </span>
         </div>
       </header>
       {error && <p className="whiteboard-error" role="status">{error}</p>}
       <div className="whiteboard-canvas-wrap">
         <div className="whiteboard-side-tools" aria-hidden="true">
-          <span>↖</span><span>✎</span><span>◫</span><span>▢</span><span>＋</span>
+          <span>P</span><span>E</span><span>R</span><span>O</span><span>N</span>
         </div>
-        <div className="whiteboard-undo-tools" aria-hidden="true"><span>↶</span><span>↷</span></div>
+        <div className="whiteboard-undo-tools" aria-hidden="true"><span>U</span><span>R</span></div>
         <canvas
           ref={canvasRef}
           aria-label="View the teacher's math notes"

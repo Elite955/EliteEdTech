@@ -24,8 +24,8 @@ Base URL: `/api` in local development. For deployed frontends, set `VITE_API_URL
 | POST | `/auth/mfa/verify` | `{challenge, code}` | 200 `{user, permissions}` + cookie |
 | POST | `/auth/password-reset/request` | `{email}` | 202 |
 | POST | `/auth/password-reset/confirm` | `{token, password}` | 200 |
-| GET | `/auth/me` | — | `{user, permissions}` |
-| POST | `/auth/logout` | — | 204 |
+| GET | `/auth/me` | - | `{user, permissions}` |
+| POST | `/auth/logout` | - | 204 |
 
 First login for any role returns `{requiresMfaSetup:true, challenge, otpAuthUrl, accountName}`; later logins return `{requiresMfa:true, challenge}` unless a valid `code` is supplied. Complete setup with `/auth/mfa/confirm` and later sign-ins with `/auth/mfa/verify`. Password minimum is 12 characters. Students require `age`; teachers require `phone`, `subjects`, and `hourly_rate` and are auto-approved.
 
@@ -40,13 +40,16 @@ All require a student session.
 | GET | `/teachers/:id` | One approved teacher |
 | POST | `/bookings` | `{teacher_id, date, start_time, end_time}`; validates availability and overlap, computes amount |
 | GET | `/bookings/mine` | Student bookings |
-| POST | `/payments/order` | `{booking_id}` → Razorpay order params; booking must be `approved` |
+| POST | `/payments/order` | `{booking_id}` -> Razorpay order params; booking must be `approved` |
 | POST | `/payments/verify` | `{razorpay_order_id, razorpay_payment_id, razorpay_signature}` |
 | POST | `/payments/webhook` | Raw Razorpay webhook, `X-Razorpay-Signature` |
 | GET | `/payments/mine` | Payment history |
 | GET | `/sessions/mine` | Class sessions, timing, attendance count, recording fields |
 | POST | `/sessions/:id/attendance` | `{action:'join'|'leave'}`; records student attendance |
 | POST | `/sessions/:id/meeting` | Creates/returns meeting URL; student cannot join before start |
+| GET | `/sessions/:id/materials` | Materials for a paid/completed class the student is enrolled in |
+| GET | `/sessions/:id/materials/:materialId/file` | Streams an uploaded material; link materials use `external_url` |
+| GET | `/sessions/:id/messages` | Private messages between the student and the class teacher |
 | GET | `/chat/messages?room=global` | Latest 50 visible messages |
 | POST | `/feedback` | `{booking_id, rating, testimony_text, allow_display}`; completed bookings only |
 | GET | `/feedback/mine` | Student feedback |
@@ -68,6 +71,11 @@ All require a teacher session.
 | GET | `/sessions` | Class sessions with filters |
 | GET | `/sessions/:id` | Session detail plus attendance records |
 | POST | `/sessions/:id/meeting` | Creates/returns meeting URL; teacher may prepare before start |
+| GET/POST | `/sessions/:id/materials` | List or add a link material (`title`, `description?`, `url`) |
+| POST | `/sessions/:id/materials/file` | Raw `application/octet-stream` upload (10 MB max); headers `X-Material-Title`, `X-Material-Description`, `X-Filename`, `X-Material-Mime` (URI-encoded) |
+| GET | `/sessions/:id/materials/:materialId/file` | Streams an uploaded material |
+| DELETE | `/sessions/:id/materials/:materialId` | Deletes a material |
+| GET | `/sessions/:id/messages` | Private messages between the teacher and the class student |
 | POST | `/sessions/:id/start` | Marks session ongoing and records teacher join |
 | POST | `/sessions/:id/end` | Marks session complete and records teacher leave |
 | PATCH | `/sessions/:id/recording-consent` | `{consent:boolean}` |
@@ -110,14 +118,34 @@ Connect to the API origin with cookies, `auth.portal` set to `student` or `teach
 
 ### Whiteboard
 
-- `whiteboard:join` `{sessionId}` → `{ok, strokes}`; requires an active paid class participant.
+- `whiteboard:join` `{sessionId}` -> `{ok, strokes}`; requires an active paid class participant.
 - `whiteboard:leave` `{sessionId}`
-- `whiteboard:stroke:start` `{sessionId, stroke}`
-- `whiteboard:stroke:points` `{sessionId, strokeId, points}`
+- `whiteboard:stroke:start` `{sessionId, stroke}`; stroke tools are `pen`, `eraser`, `rectangle`, `ellipse`, `note`
+- `whiteboard:stroke:points` `{sessionId, strokeId, points}`; pen and eraser only
+- `whiteboard:delete` `{sessionId, strokeId}` -> emits `whiteboard:remove` `{strokeId}`
+- `whiteboard:replace` `{sessionId, strokes}` -> emits `whiteboard:replace` `{strokes}`
+- `whiteboard:undo` `{sessionId}` -> callback `{ok, strokes}`
+- `whiteboard:redo` `{sessionId}` -> callback `{ok, strokes}`
 - `whiteboard:clear` `{sessionId}`
 - `whiteboard:error` `{message}`
 
-Only teachers may draw or clear; students receive live updates. Board state is in-memory and temporary.
+Only teachers may draw, edit, or clear; students receive live updates. Board state is in-memory and temporary.
+
+### Class materials and private messages (HTTP)
+
+- Materials require a session participant with booking status `paid` or `completed` and a session that is not `cancelled`.
+- Uploads are capped at 10 MB. Each material is exactly one of an uploaded file or an `http(s)` link.
+- Teacher material headers: `X-Material-Title`, `X-Material-Description`, `X-Filename`, `X-Material-Mime`; values are URI-encoded.
+- Private messages are persisted in `class_messages`, limited to 500 characters, and only readable by the class teacher and the enrolled student.
+
+### Class private chat (Socket.IO)
+
+- `class:join` `{sessionId}` -> callback `{ok, teacherId, studentId}`; joins room `class:<sessionId>`
+- `class:leave` `{sessionId}`
+- `class:message` `{sessionId, content}` -> persists and broadcasts `class:message:new`
+- `class:message:new` `{id, session_id, sender_id, sender_name, sender_role, recipient_id, content, created_at}`
+- Errors arrive as `class:error` `{message}`
+- Student messages from ages 10-12 are passed through the profanity filter before storage and broadcast.
 
 ## Provider constraints
 

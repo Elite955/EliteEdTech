@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, recordAttendance } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 import CompletionEffect from '../components/CompletionEffect'
 import JoinClassDialog from '../components/JoinClassDialog'
+import ClassResourcesPanel from '../components/ClassResourcesPanel'
 
 function SessionCountdown({ startAt }) {
   const [remaining, setRemaining] = useState(() => Math.max(0, new Date(startAt).getTime() - Date.now()))
@@ -26,6 +28,7 @@ export default function SessionHistory() {
   const [sessions, setSessions] = useState(null)
   const [err, setErr] = useState('')
   const [joining, setJoining] = useState(null)
+  const [resourcesFor, setResourcesFor] = useState(null)
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export default function SessionHistory() {
       {err && <div className="alert error">{err}</div>}
 
       {sessions === null ? (
-        <div className="loading">Loading sessions…</div>
+        <div className="loading">Loading sessions...</div>
       ) : sessions.length === 0 ? (
         <div className="empty">No sessions yet.</div>
       ) : (
@@ -74,9 +77,9 @@ export default function SessionHistory() {
                   <div className="meta">
                     <span>{s.date}</span>
                     <span>
-                      {s.started_at ? new Date(s.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                      {' – '}
-                      {s.ended_at ? new Date(s.ended_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      {s.started_at ? new Date(s.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                      {' - '}
+                      {s.ended_at ? new Date(s.ended_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
                     </span>
                     {s.duration_minutes != null && <span>Duration: {s.duration_minutes} min</span>}
                     {s.attendance_count != null && <span>Attendance: {s.attendance_count}</span>}
@@ -98,6 +101,14 @@ export default function SessionHistory() {
                       </button>
                     </>
                   )}
+                  {s.session_id && ['paid', 'completed'].includes(s.booking_status) && s.status !== 'cancelled' && (
+                    <button className="btn small ghost" type="button" onClick={() => setResourcesFor(s)}>
+                      Class materials
+                    </button>
+                  )}
+                  {s.status === 'completed' && s.booking_id && (
+                    <Link className="btn small" to={`/feedback?booking=${encodeURIComponent(s.booking_id)}`}>Leave feedback</Link>
+                  )}
                   {s.recording_consent && s.recording_url ? (
                     <a className="btn small ghost" href={s.recording_url} target="_blank" rel="noreferrer">
                       Watch recording
@@ -112,6 +123,21 @@ export default function SessionHistory() {
         </div>
       )}
       {joining && <JoinClassDialog session={joining} onClose={closeSession} />}
+      {resourcesFor && (
+        <div className="join-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setResourcesFor(null) }}>
+          <section className="join-dialog class-resources-dialog" role="dialog" aria-modal="true" aria-labelledby="class-resources-title">
+            <div className="join-dialog-head">
+              <div>
+                <p className="join-dialog-label">Class resources</p>
+                <h2 id="class-resources-title">Class materials</h2>
+              </div>
+              <button type="button" className="icon-button" aria-label="Close class materials" onClick={() => setResourcesFor(null)}>&times;</button>
+            </div>
+            <p className="join-dialog-meta">{resourcesFor.teacher?.name || 'Your teacher'}{resourcesFor.date ? ` - ${resourcesFor.date}` : ''}</p>
+            <ClassResourcesPanel sessionId={resourcesFor.session_id} teacherName={resourcesFor.teacher?.name} />
+          </section>
+        </div>
+      )}
     </div>
   )
 }

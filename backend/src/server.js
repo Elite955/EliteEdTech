@@ -14,6 +14,7 @@ import { teacherRouter } from './routes/teacher.js';
 import { censorContent } from './security/profanity.js';
 import { PORTAL_COOKIES, normalizePortal, portalFromOrigin } from './security/portals.js';
 import { registerWhiteboardHandlers } from './realtime/whiteboard.js';
+import { registerClassroomHandlers } from './realtime/classroom.js';
 import { razorpayConfigured } from './payments/razorpay.js';
 import { notificationConfiguration } from './notifications/notifier.js';
 import { selectedMeetingProviderId } from './meetings/provider.js';
@@ -192,6 +193,7 @@ io.on('connection', (socket) => {
     socket.join('global');
     socket.emit('chat:ready', { room: 'global' });
     registerWhiteboardHandlers(socket, pool);
+    registerClassroomHandlers(socket, pool);
   }
   if (socket.data.kind !== 'student' && socket.data.kind !== 'teacher') return;
 

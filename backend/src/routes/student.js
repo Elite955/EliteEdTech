@@ -890,3 +890,77 @@ studentRouter.get('/feedback/mine', requireAuthenticatedUser, requireStudent, as
     return next(error);
   }
 });
+
+async function loadStudentClassSession(sessionId, studentId) {
+  const { rows } = await pool.query(
+    `SELECT cs.id, cs.booking_id, b.teacher_id, b.student_id, b.status AS booking_status, cs.status AS session_status
+     FROM class_sessions cs JOIN bookings b ON b.id = cs.booking_id
+     WHERE cs.id = $1 AND b.student_id = $2`,
+    [sessionId, studentId],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  if (!['paid', 'completed'].includes(row.booking_status)) return null;
+  if (row.session_status === 'cancelled') return null;
+  return row;
+}
+
+studentRouter.get('/sessions/:id/materials', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
+  try {
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const session = await loadStudentClassSession(req.params.id, req.auth.id);
+    if (!session) return res.status(404).json({ error: 'Class session not found.' });
+    const { rows } = await pool.query(
+      `SELECT id, session_id, title, description, filename, mime_type, size_bytes, external_url,
+              content IS NOT NULL AS has_file, created_at
+       FROM class_materials WHERE session_id = $1 ORDER BY created_at DESC`,
+      [session.id],
+    );
+    return res.json({ materials: rows.map((row) => ({ ...row, size_bytes: Number(row.size_bytes) })) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+studentRouter.get('/sessions/:id/materials/:materialId/file', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
+  try {
+    if (!z.string().uuid().safeParse(req.params.id).success || !z.string().uuid().safeParse(req.params.materialId).success) {
+      return res.status(404).json({ error: 'Study material not found.' });
+    }
+    const session = await loadStudentClassSession(req.params.id, req.auth.id);
+    if (!session) return res.status(404).json({ error: 'Class session not found.' });
+    const { rows } = await pool.query(
+      `SELECT filename, mime_type, content FROM class_materials
+       WHERE id = $1 AND session_id = $2`,
+      [req.params.materialId, session.id],
+    );
+    const row = rows[0];
+    if (!row || !row.content) return res.status(404).json({ error: 'Study material not found.' });
+    res.set('Content-Type', row.mime_type);
+    res.set('Content-Disposition', `inline; filename="${String(row.filename).replace(/[^a-zA-Z0-9._-]/g, '_')}"`);
+    return res.send(row.content);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+studentRouter.get('/sessions/:id/messages', requireAuthenticatedUser, requireStudent, async (req, res, next) => {
+  try {
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      return res.status(404).json({ error: 'Class session not found.' });
+    }
+    const session = await loadStudentClassSession(req.params.id, req.auth.id);
+    if (!session) return res.status(404).json({ error: 'Class session not found.' });
+    const { rows } = await pool.query(
+      `SELECT m.id, m.session_id, m.sender_id, m.recipient_id, m.content, m.created_at, u.name AS sender_name
+       FROM class_messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.session_id = $1 ORDER BY m.created_at DESC LIMIT 100`,
+      [session.id],
+    );
+    return res.json({ messages: rows.reverse().map((row) => ({ ...row, sender_role: row.sender_id === session.teacher_id ? 'teacher' : 'student' })) });
+  } catch (error) {
+    return next(error);
+  }
+});

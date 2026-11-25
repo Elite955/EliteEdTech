@@ -397,3 +397,31 @@ CREATE TABLE IF NOT EXISTS class_recordings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS class_recordings_teacher_idx ON class_recordings(teacher_id);
+
+CREATE TABLE IF NOT EXISTS class_materials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
+  teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 160),
+  description TEXT NOT NULL DEFAULT '' CHECK (char_length(description) <= 1000),
+  filename TEXT NOT NULL DEFAULT '',
+  mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+  size_bytes BIGINT NOT NULL DEFAULT 0 CHECK (size_bytes >= 0 AND size_bytes <= 10485760),
+  content BYTEA,
+  external_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((content IS NOT NULL AND external_url IS NULL) OR (content IS NULL AND external_url IS NOT NULL)),
+  CHECK (external_url IS NULL OR external_url ~* '^https?://')
+);
+CREATE INDEX IF NOT EXISTS class_materials_session_idx ON class_materials(session_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS class_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL CHECK (char_length(content) BETWEEN 1 AND 500),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (sender_id <> recipient_id)
+);
+CREATE INDEX IF NOT EXISTS class_messages_session_idx ON class_messages(session_id, created_at);

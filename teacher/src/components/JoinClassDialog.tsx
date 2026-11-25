@@ -3,6 +3,7 @@ import { ExternalLink, Video, X } from 'lucide-react'
 import { api, getErrorMessage } from '../lib/api'
 import { useAuth } from '../auth/useAuth'
 import { SharedWhiteboard } from './SharedWhiteboard'
+import { ClassResourcesPanel } from './ClassResourcesPanel'
 import type { ClassSession } from '../lib/types'
 
 const JITSI_DOMAIN = 'meet.jit.si'
@@ -139,7 +140,17 @@ function JitsiMeetingFrame({
   )
 }
 
-export function JoinClassDialog({ session, onClose }: { session: ClassSession; onClose: () => void }) {
+export function JoinClassDialog({
+  session,
+  onClose,
+  onStarted,
+  onEnded,
+}: {
+  session: ClassSession
+  onClose: () => void
+  onStarted?: () => void
+  onEnded?: () => void
+}) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -149,6 +160,11 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
   const [ending, setEnding] = useState(false)
   const [status, setStatus] = useState('')
   const [embedError, setEmbedError] = useState('')
+  const startedRef = useRef(false)
+  const onStartedRef = useRef(onStarted)
+  onStartedRef.current = onStarted
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
   const roomName = jaas?.roomName || jitsiRoomName(joinUrl)
   const isJitsi = Boolean(roomName)
   const providerName = isJitsi
@@ -164,9 +180,25 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
     setEmbedError('')
     async function prepareMeeting() {
       try {
+        let started = false
+        if (session.status === 'scheduled' && !startedRef.current) {
+          try {
+            await api(`/teacher/sessions/${session.id}/start`, { method: 'POST' })
+            startedRef.current = true
+            started = true
+          } catch {
+            // The meeting request below reports the actionable error if the class
+            // cannot start; an already-started session still opens normally.
+          }
+        }
         const result = await api<MeetingReply>(`/teacher/sessions/${session.id}/meeting`, { method: 'POST' })
         if (!active) return
-        setStatus(result.status)
+        if (started) {
+          setStatus('ongoing')
+          onStartedRef.current?.()
+        } else {
+          setStatus(result.status)
+        }
         if (!result.joinUrl) {
           setError(result.error ?? 'The meeting link is not ready yet. Please try again shortly.')
           return
@@ -181,7 +213,7 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
     }
     void prepareMeeting()
     return () => { active = false }
-  }, [session.id])
+  }, [session.id, session.status])
 
   async function endClass() {
     if (!window.confirm('End this class for everyone? The session will be marked completed.')) return
@@ -189,6 +221,7 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
     try {
       await api(`/teacher/sessions/${session.id}/end`, { method: 'POST' })
       meetingApiRef.current?.executeCommand?.('endConference')
+      onEndedRef.current?.()
       onClose()
     } catch (err) {
       setError(getErrorMessage(err))
@@ -203,7 +236,7 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
       role="presentation"
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}
     >
-      <section className={`w-full ${isJitsi ? 'max-w-[1500px] max-h-[calc(100vh-2rem)] overflow-y-auto' : 'max-w-md'} rounded-2xl border border-slate-200 bg-white p-6 shadow-xl`} role="dialog" aria-modal="true" aria-labelledby="join-class-title">
+      <section className={`w-full ${isJitsi ? 'max-w-[1500px] max-h-[calc(100vh-2rem)] overflow-y-auto' : 'max-w-lg'} rounded-2xl border border-slate-200 bg-white p-6 shadow-xl`} role="dialog" aria-modal="true" aria-labelledby="join-class-title">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-blue-600">Live class</p>
@@ -282,6 +315,12 @@ export function JoinClassDialog({ session, onClose }: { session: ClassSession; o
             </div>
           )}
         </div>
+
+        {!loading && !error && (
+          <div className="mt-4">
+            <ClassResourcesPanel sessionId={session.id} studentName={session.student_name} />
+          </div>
+        )}
 
         {!loading && (
           <div className="mt-5 flex flex-col gap-2">

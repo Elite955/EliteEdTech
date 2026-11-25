@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Video, Filter, Trash2 } from 'lucide-react'
+import { Video, Filter, Trash2, X } from 'lucide-react'
 import { api, getErrorMessage } from '../lib/api'
 import type { ClassSession } from '../lib/types'
 import { JoinClassDialog } from '../components/JoinClassDialog'
+import { ClassResourcesPanel } from '../components/ClassResourcesPanel'
 
 type SessionFilter = 'all' | 'scheduled' | 'ongoing' | 'completed' | 'cancelled'
 
@@ -20,6 +21,7 @@ export function SessionsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [joining, setJoining] = useState<ClassSession | null>(null)
+  const [resourcesFor, setResourcesFor] = useState<ClassSession | null>(null)
   const [busyId, setBusyId] = useState('')
 
   const load = useCallback(async () => {
@@ -138,14 +140,14 @@ export function SessionsPage() {
                   </div>
                   <p className="text-xs text-slate-500">
                     {s.starts_at && new Date(s.starts_at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                    {s.starts_at && ' · '}
+                    {s.starts_at && ' - '}
                     {s.starts_at && new Date(s.starts_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                    {s.ends_at && ' – '}
+                    {s.ends_at && ' - '}
                     {s.ends_at && new Date(s.ends_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   <p className="text-xs text-slate-400">
                     Provider: {s.meeting_provider === 'zoom' ? 'Zoom' : 'Google Meet'}
-                    {s.recording_consent && ' · 🔴 Recording consented'}
+                    {s.recording_consent && ' - Recording consented'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -159,11 +161,20 @@ export function SessionsPage() {
                       Join class
                     </button>
                   )}
+                  {s.status !== 'cancelled' && (
+                    <button
+                      type="button"
+                      onClick={() => setResourcesFor(s)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors"
+                    >
+                      Resources
+                    </button>
+                  )}
                   <Link
                     to={`/sessions/${s.id}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors"
                   >
-                    Details →
+                    Details
                   </Link>
                   {['scheduled', 'ongoing'].includes(s.status) && (
                     <button
@@ -182,7 +193,7 @@ export function SessionsPage() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-red-200 text-red-700 rounded-lg text-xs font-medium hover:bg-red-50 disabled:opacity-50 transition-colors"
                   >
                     <Trash2 size={13} />
-                    {busyId === s.id ? 'Deleting…' : 'Delete'}
+                    {busyId === s.id ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </div>
@@ -194,7 +205,7 @@ export function SessionsPage() {
                     rel="noopener noreferrer"
                     className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                   >
-                    📹 View Recording →
+                    View Recording
                   </a>
                   <button
                     type="button"
@@ -211,7 +222,41 @@ export function SessionsPage() {
           ))}
         </div>
       )}
-      {joining && <JoinClassDialog session={joining} onClose={() => setJoining(null)} />}
+      {joining && <JoinClassDialog session={joining} onClose={() => setJoining(null)} onStarted={() => { void load() }} onEnded={() => { void load() }} />}
+      {resourcesFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4"
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setResourcesFor(null) }}
+        >
+          <section
+            className="w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="session-resources-title"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-blue-600">Class resources</p>
+                <h2 id="session-resources-title" className="mt-1 text-lg font-bold text-slate-900">
+                  {resourcesFor.student_name ?? 'Student'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResourcesFor(null)}
+                aria-label="Close class resources"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mt-3">
+              <ClassResourcesPanel sessionId={resourcesFor.id} studentName={resourcesFor.student_name} />
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   )
 }

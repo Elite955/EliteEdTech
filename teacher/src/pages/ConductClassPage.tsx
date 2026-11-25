@@ -435,7 +435,7 @@ export function ConductClassPage() {
           )}
         </div>
       </div>
-      {joining && <JoinClassDialog session={session} onClose={() => setJoining(false)} />}
+      {joining && <JoinClassDialog session={session} onClose={() => setJoining(false)} onStarted={() => { void load() }} onEnded={() => { void load() }} />}
     </div>
   )
 }

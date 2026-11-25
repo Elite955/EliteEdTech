@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import SharedWhiteboard from './SharedWhiteboard'
+import ClassResourcesPanel from './ClassResourcesPanel'
 
 const JITSI_DOMAIN = 'meet.jit.si'
 const jitsiApiPromises = new Map()
@@ -138,20 +139,20 @@ export default function JoinClassDialog({ session, onClose }) {
             <h2 id="join-dialog-title">Join your class</h2>
           </div>
           <button type="button" className="icon-button" aria-label="Close join class dialog" onClick={onClose}>
-            ×
+          <button type="button" className="icon-button" aria-label="Close join class dialog" onClick={onClose}>&times;</button>
           </button>
         </div>
 
         <p className="join-dialog-meta">
           {session.teacher?.name || 'Your teacher'}
-          {session.date ? ` · ${session.date}` : ''}
+          {session.date ? ` - ${session.date}` : ''}
           {session.start_time ? ` at ${session.start_time}` : ''}
         </p>
 
         {state.loading && (
           <div className="join-dialog-state">
             <span className="join-dialog-spinner" aria-hidden="true" />
-            <p>Preparing your meeting…</p>
+            <p>Preparing your meeting...</p>
           </div>
         )}
 
@@ -204,6 +205,7 @@ export default function JoinClassDialog({ session, onClose }) {
                 <p className="muted">{providerName} opens in a new tab. Keep this portal open to return to your session details.</p>
               </>
             )}
+            <ClassResourcesPanel sessionId={session.session_id} teacherName={session.teacher?.name} />
           </div>
         )}
 
